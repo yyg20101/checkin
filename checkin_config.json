@@ -1,0 +1,19 @@
+{
+    "checkin_tasks": [
+        {
+            "name": "DoingFB",
+            "script": "checkin_doingfb.py",
+            "cookie_secret": "COOKIE_DOINGFB"
+        },
+        {
+            "name": "Enshan",
+            "script": "checkin_enshan.py",
+            "cookie_secret": "COOKIE_ENSHAN"
+        },
+        {
+            "name": "Hostloc",
+            "script": "checkin_hostloc.py",
+            "cookie_secret": "COOKIE_HOSTLOC"
+        }
+    ]
+}

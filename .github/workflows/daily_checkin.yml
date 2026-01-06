@@ -1,0 +1,197 @@
+name: Daily Checkin
+
+on:
+  workflow_dispatch: # 允许手动触发
+  schedule:
+    # 设置在每天的 UTC 时间 22:00 运行 (对应中国时区 Asia/Shanghai 上午6点)
+    - cron: '0 22 * * *'
+
+# 设置工作流权限，允许创建Release
+permissions:
+  contents: write  # 创建Release需要此权限
+  actions: read    # 读取Actions状态
+
+jobs:
+  checkin:
+    runs-on: ubuntu-latest
+    env:
+      # 设置时区为中国时区
+      TZ: Asia/Shanghai
+      # 所有 Cookie Secrets 传递到环境变量
+      COOKIE_DOINGFB: ${{ secrets.COOKIE_DOINGFB }}
+      COOKIE_ENSHAN: ${{ secrets.COOKIE_ENSHAN }}
+      COOKIE_HOSTLOC: ${{ secrets.COOKIE_HOSTLOC }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run all checkin tasks
+        id: run-tasks
+        run: |
+          DATE=$(date +%Y%m%d)
+          DATETIME=$(date '+%Y-%m-%d %H:%M:%S %Z')
+          mkdir -p checkin-logs
+          
+          # 初始化统计变量
+          TOTAL_TASKS=0
+          SUCCESS_TASKS=0
+          TASK_RESULTS=""
+          
+          echo "🚀 开始执行签到任务..."
+          echo "📅 执行时间: $DATETIME (中国时区)"
+          echo ""
+          
+          # 遍历配置执行每个任务
+          while read -r task; do
+            name=$(echo "$task" | jq -r '.name')
+            script=$(echo "$task" | jq -r '.script')
+            cookie_secret=$(echo "$task" | jq -r '.cookie_secret')
+            
+            LOG_FILE="checkin-logs/${name}-${DATE}.log"
+            TOTAL_TASKS=$((TOTAL_TASKS + 1))
+            
+            echo "=========================================="
+            echo "🔄 [$TOTAL_TASKS] 开始执行 $name 签到..."
+            echo "=========================================="
+            
+            # 添加日志头部信息
+            echo "=== $name 签到任务日志 ===" > "$LOG_FILE"
+            echo "执行时间: $DATETIME (中国时区)" >> "$LOG_FILE"
+            echo "任务脚本: $script" >> "$LOG_FILE"
+            echo "========================================" >> "$LOG_FILE"
+            echo "" >> "$LOG_FILE"
+            
+            # 执行脚本并记录输出
+            # 使用间接引用获取对应的 Cookie 值
+            export COOKIE_VALUE="${!cookie_secret}"
+            python "$script" 2>&1 | tee -a "$LOG_FILE"
+            EXIT_CODE=${PIPESTATUS[0]}
+            
+            # 记录任务完成时间和退出状态
+            echo "" >> "$LOG_FILE"
+            echo "========================================" >> "$LOG_FILE"
+            echo "任务完成时间: $(date '+%Y-%m-%d %H:%M:%S %Z') (中国时区)" >> "$LOG_FILE"
+            echo "退出状态码: $EXIT_CODE" >> "$LOG_FILE"
+            
+            # 提取标准化摘要
+            result_info=""
+            if grep -q "\[CHECKIN_SUMMARY\]" "$LOG_FILE"; then
+              summary_json=$(grep "\[CHECKIN_SUMMARY\]" "$LOG_FILE" | tail -1 | sed 's/.*\[CHECKIN_SUMMARY\] //')
+              result_info=$(echo "$summary_json" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('message',''))" 2>/dev/null || echo "")
+            fi
+            
+            # 记录任务结果
+            if [ $EXIT_CODE -eq 0 ]; then
+              echo "✅ $name 执行成功"
+              SUCCESS_TASKS=$((SUCCESS_TASKS + 1))
+              TASK_RESULTS="${TASK_RESULTS}**${name}:** ✅ 成功\n"
+            else
+              echo "❌ $name 执行失败 (状态码: $EXIT_CODE)"
+              TASK_RESULTS="${TASK_RESULTS}**${name}:** ❌ 失败\n"
+            fi
+            
+            if [ -n "$result_info" ]; then
+              TASK_RESULTS="${TASK_RESULTS}  - ${result_info}\n"
+            fi
+            TASK_RESULTS="${TASK_RESULTS}\n"
+            
+            echo ""
+          done < <(jq -c '.checkin_tasks[]' checkin_config.json)
+          
+          echo "=========================================="
+          echo "📊 所有任务执行完成"
+          echo "   总任务: $TOTAL_TASKS, 成功: $SUCCESS_TASKS, 失败: $((TOTAL_TASKS - SUCCESS_TASKS))"
+          echo "=========================================="
+          
+          # 保存变量供后续步骤使用
+          echo "DATE=$DATE" >> $GITHUB_ENV
+          echo "DATETIME=$DATETIME" >> $GITHUB_ENV
+          echo "TOTAL_TASKS=$TOTAL_TASKS" >> $GITHUB_ENV
+          echo "SUCCESS_TASKS=$SUCCESS_TASKS" >> $GITHUB_ENV
+          # 使用多行变量语法
+          {
+            echo "TASK_RESULTS<<EOF"
+            echo -e "$TASK_RESULTS"
+            echo "EOF"
+          } >> $GITHUB_ENV
+
+      - name: Create release summary
+        run: |
+          RELEASE_SUMMARY="release-summary.md"
+          
+          echo "## 📅 签到任务执行摘要 - $DATE" > "$RELEASE_SUMMARY"
+          echo "" >> "$RELEASE_SUMMARY"
+          echo "**🕒 执行时间:** $DATETIME (中国时区)" >> "$RELEASE_SUMMARY"
+          echo "" >> "$RELEASE_SUMMARY"
+          
+          echo "### 📊 任务执行结果" >> "$RELEASE_SUMMARY"
+          echo "" >> "$RELEASE_SUMMARY"
+          echo -e "$TASK_RESULTS" >> "$RELEASE_SUMMARY"
+          
+          echo "### 📈 执行统计" >> "$RELEASE_SUMMARY"
+          echo "" >> "$RELEASE_SUMMARY"
+          
+          if [ $TOTAL_TASKS -gt 0 ]; then
+            success_rate=$(( SUCCESS_TASKS * 100 / TOTAL_TASKS ))
+            echo "- 📋 **总任务数:** $TOTAL_TASKS" >> "$RELEASE_SUMMARY"
+            echo "- ✅ **成功任务:** $SUCCESS_TASKS" >> "$RELEASE_SUMMARY"
+            echo "- ❌ **失败任务:** $((TOTAL_TASKS - SUCCESS_TASKS))" >> "$RELEASE_SUMMARY"
+            echo "- 📊 **成功率:** ${success_rate}%" >> "$RELEASE_SUMMARY"
+          else
+            echo "- ⚠️ **状态:** 未找到任务执行记录" >> "$RELEASE_SUMMARY"
+          fi
+          
+          echo "" >> "$RELEASE_SUMMARY"
+          echo "---" >> "$RELEASE_SUMMARY"
+          echo "📦 **完整日志:** 请下载附件中的日志压缩包查看详细执行过程" >> "$RELEASE_SUMMARY"
+          
+          # 创建日志压缩包
+          ARCHIVE_NAME="checkin-logs-${DATE}.tar.gz"
+          tar -czf "$ARCHIVE_NAME" -C checkin-logs .
+          
+          echo "LOG_ARCHIVE=$ARCHIVE_NAME" >> $GITHUB_ENV
+          echo "RELEASE_SUMMARY=$RELEASE_SUMMARY" >> $GITHUB_ENV
+
+      - name: Upload logs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkin-logs-${{ env.DATE }}
+          path: checkin-logs/*.log
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Create Release
+        id: create-release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: checkin-logs-${{ env.DATE }}
+          name: 签到日志 - ${{ env.DATE }}
+          body_path: ${{ env.RELEASE_SUMMARY }}
+          files: ${{ env.LOG_ARCHIVE }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          draft: false
+          prerelease: false
+          make_latest: true
+        continue-on-error: true
+        
+      - name: Release creation status
+        run: |
+          if [ "${{ steps.create-release.outcome }}" = "success" ]; then
+            echo "✅ Release创建成功"
+            echo "📦 Release标签: checkin-logs-${{ env.DATE }}"
+          else
+            echo "❌ Release创建失败"
+            echo "🔍 请检查GitHub Actions日志获取详细错误信息"
+          fi

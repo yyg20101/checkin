@@ -2,6 +2,7 @@ import os
 import re
 import time
 import random
+import json
 # 使用 curl_cffi 来模拟浏览器，防止被屏蔽
 from curl_cffi import requests
 
@@ -101,10 +102,19 @@ def main():
             print(f"|  金钱: {credits['money']}")
             print(f"|  威望: {credits['prestige']}")
             print(f"|  积分: {credits['points']}")
+            # 输出标准化摘要
+            summary = {
+                "status": "success",
+                "message": f"💎 金钱: {credits['money']} | 🏆 积分: {credits['points']}",
+                "details": {"money": credits['money'], "prestige": credits['prestige'], "points": credits['points']}
+            }
+            print(f"[CHECKIN_SUMMARY] {json.dumps(summary, ensure_ascii=False)}")
             if "未找到" in credits.values():
                 print("\n[注意] 部分信息提取失败，可能是网站页面结构已更新。")
         else:
             print("未能获取到账户积分信息。")
+            summary = {"status": "failed", "message": "❌ 未能获取积分信息"}
+            print(f"[CHECKIN_SUMMARY] {json.dumps(summary, ensure_ascii=False)}")
         print("==================================")
         print("\n🎉 任务圆满完成！")
 

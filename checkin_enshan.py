@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import json
 from curl_cffi import requests
 
 BASE_URL = "https://www.right.com.cn/forum/"
@@ -127,8 +128,17 @@ def main():
             print(f"|  uid: {uid}")
             print(f"|  用户组: {gid if gid else '-'}")
             print(f"|  恩山币: {esb}")
+            # 输出标准化摘要
+            summary = {
+                "status": "success",
+                "message": f"🪙 签到成功，恩山币: {esb}",
+                "details": {"coins": esb, "username": user, "user_group": gid}
+            }
+            print(f"[CHECKIN_SUMMARY] {json.dumps(summary, ensure_ascii=False)}")
         else:
             print("|  未能获取到恩山币信息。")
+            summary = {"status": "failed", "message": "❌ 未能获取恩山币信息"}
+            print(f"[CHECKIN_SUMMARY] {json.dumps(summary, ensure_ascii=False)}")
         print("==================================")
         print("\n🎉 任务圆满完成！")
 

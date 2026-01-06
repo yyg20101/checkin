@@ -158,12 +158,27 @@ if __name__ == "__main__":
                     print(f"显示昵称: {user_info['displayName']}")
                     print(f"User ID: {user_info['id']}")
                     print(f"当前金币: {user_info['money']}")
+                    # 输出标准化摘要
+                    summary = {
+                        "status": "success",
+                        "message": f"💰 签到成功，金币: {user_info['money']}",
+                        "details": {"coins": user_info['money'], "display_name": user_info['displayName']}
+                    }
+                    print(f"[CHECKIN_SUMMARY] {json.dumps(summary, ensure_ascii=False)}")
                 else:
                     print("⚠️ 未能从签到响应中解析出完整的用户信息。")
+                    summary = {"status": "failed", "message": "⚠️ 未能解析用户信息"}
+                    print(f"[CHECKIN_SUMMARY] {json.dumps(summary, ensure_ascii=False)}")
             else:
                 # 如果不能签到，直接告知用户
                 print("\n--- 任务结果 ---")
                 print(f"🟡 今天已经签到过了（已连续签到 {days_count} 天），无需重复签到。")
+                summary = {
+                    "status": "success",
+                    "message": f"📅 已签到过，连续 {days_count} 天",
+                    "details": {"consecutive_days": days_count}
+                }
+                print(f"[CHECKIN_SUMMARY] {json.dumps(summary, ensure_ascii=False)}")
 
             print("\n🎉 任务圆满完成！")
 
