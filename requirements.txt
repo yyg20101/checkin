@@ -1,0 +1,7 @@
+requests
+curl_cffi[requests]
+selenium
+webdriver-manager
+playwright
+nodriver
+beautifulsoup4

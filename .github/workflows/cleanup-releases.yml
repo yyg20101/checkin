@@ -1,0 +1,116 @@
+name: Cleanup Releases and Tags
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: '输入 "DELETE" 确认删除所有 Releases 和 Tags'
+        required: true
+        type: string
+      delete_releases:
+        description: '删除所有 Releases'
+        required: true
+        type: boolean
+        default: true
+      delete_tags:
+        description: '删除所有 Tags'
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Asia/Shanghai
+      
+    steps:
+      - name: Validate confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "DELETE" ]; then
+            echo "❌ 确认输入不正确，操作已取消"
+            echo "请输入 'DELETE' 来确认删除操作"
+            exit 1
+          fi
+          echo "✅ 确认输入正确，开始执行清理..."
+
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0  # 获取完整历史，包括所有 tags
+
+      - name: Delete all Releases
+        if: ${{ github.event.inputs.delete_releases == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "=== 开始删除所有 Releases ==="
+          
+          # 获取所有 releases
+          releases=$(gh release list --limit 1000 --json tagName -q '.[].tagName' 2>/dev/null || echo "")
+          
+          if [ -z "$releases" ]; then
+            echo "📋 没有找到任何 Releases"
+          else
+            count=$(echo "$releases" | wc -l)
+            echo "📋 找到 $count 个 Releases，开始删除..."
+            
+            echo "$releases" | while read -r tag; do
+              if [ -n "$tag" ]; then
+                echo "🗑️ 删除 Release: $tag"
+                gh release delete "$tag" --yes --cleanup-tag 2>/dev/null || echo "  ⚠️ 删除失败: $tag"
+              fi
+            done
+            
+            echo "✅ Releases 删除完成"
+          fi
+
+      - name: Delete all Tags
+        if: ${{ github.event.inputs.delete_tags == 'true' }}
+        run: |
+          echo "=== 开始删除所有 Tags ==="
+          
+          # 获取所有远程 tags
+          tags=$(git tag -l 2>/dev/null || echo "")
+          
+          if [ -z "$tags" ]; then
+            echo "📋 没有找到任何 Tags"
+          else
+            count=$(echo "$tags" | wc -l)
+            echo "📋 找到 $count 个 Tags，开始删除..."
+            
+            # 删除本地 tags
+            echo "$tags" | while read -r tag; do
+              if [ -n "$tag" ]; then
+                echo "🗑️ 删除 Tag: $tag"
+                git tag -d "$tag" 2>/dev/null || true
+              fi
+            done
+            
+            # 推送删除到远程
+            echo "🔄 正在同步删除到远程..."
+            git push origin --delete $(echo "$tags" | tr '\n' ' ') 2>/dev/null || {
+              # 如果批量删除失败，逐个删除
+              echo "$tags" | while read -r tag; do
+                if [ -n "$tag" ]; then
+                  git push origin --delete "$tag" 2>/dev/null || echo "  ⚠️ 远程删除失败: $tag"
+                fi
+              done
+            }
+            
+            echo "✅ Tags 删除完成"
+          fi
+
+      - name: Summary
+        run: |
+          echo ""
+          echo "=========================================="
+          echo "🎉 清理任务完成！"
+          echo "=========================================="
+          echo "删除 Releases: ${{ github.event.inputs.delete_releases }}"
+          echo "删除 Tags: ${{ github.event.inputs.delete_tags }}"
+          echo "执行时间: $(date '+%Y-%m-%d %H:%M:%S %Z')"
+          echo "=========================================="
