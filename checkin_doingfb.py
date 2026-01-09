@@ -81,12 +81,26 @@ def perform_checkin(session, user_id, csrf_token, allow_checkin, checkin_days_co
     }
 
     session.headers.update({
-        "content-type": "application/json",
+        "content-type": "application/json; charset=UTF-8",
+        "origin": "https://doingfb.com",
+        "referer": "https://doingfb.com/",
         "x-csrf-token": csrf_token,
+        "x-http-method-override": "PATCH",
     })
 
-    response = session.post(url, json=data)
+    # 使用 data= 而非 json= 以避免 requests 自动覆盖 Content-Type
+    json_body = json.dumps(data, separators=(',', ':'))
+    print(f"[DEBUG] 请求 URL: {url}")
+    print(f"[DEBUG] 请求体: {json_body}")
+    print(f"[DEBUG] 请求头: {dict(session.headers)}")
+
+    response = session.post(url, data=json_body)
     session.headers.pop("x-http-method-override", None)
+
+    # 打印响应详情以便调试
+    print(f"[DEBUG] 响应状态码: {response.status_code}")
+    print(f"[DEBUG] 响应内容: {response.text[:500] if response.text else 'Empty'}")
+
     response.raise_for_status()
     print("✅ 签到成功！正在解析返回的数据...")
 
