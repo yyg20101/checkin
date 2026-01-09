@@ -81,12 +81,8 @@ def perform_checkin(session, user_id, csrf_token, allow_checkin, checkin_days_co
     }
 
     session.headers.update({
-        "accept": "application/json, text/plain, */*",
         "content-type": "application/json",
-        "origin": "https://doingfb.com",
-        "referer": "https://doingfb.com/",
         "x-csrf-token": csrf_token,
-        "x-http-method-override": "PATCH"
     })
 
     response = session.post(url, json=data)
@@ -131,19 +127,7 @@ if __name__ == "__main__":
     with requests.Session() as s:
         # 设置请求头，完全模拟浏览器行为（使用小写 header 名称）
         s.headers.update({
-            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-            "accept-language": "zh-CN,zh;q=0.9,en;q=0.8",
-            "cache-control": "max-age=0",
             "cookie": cookie,
-            "priority": "u=0, i",
-            "sec-ch-ua": '"Microsoft Edge";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
-            "sec-ch-ua-mobile": "?1",
-            "sec-ch-ua-platform": '"Android"',
-            "sec-fetch-dest": "document",
-            "sec-fetch-mode": "navigate",
-            "sec-fetch-site": "none",
-            "sec-fetch-user": "?1",
-            "upgrade-insecure-requests": "1",
             "user-agent": "Mozilla/5.0 (Linux; Android 8.0.0; SM-G955U Build/R16NW) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Mobile Safari/537.36 Edg/143.0.0.0",
         })
 
