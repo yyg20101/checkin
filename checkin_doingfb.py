@@ -81,6 +81,10 @@ def perform_checkin(session, user_id, csrf_token, allow_checkin, checkin_days_co
     }
 
     session.headers.update({
+        "accept": "application/json, text/plain, */*",
+        "content-type": "application/json",
+        "origin": "https://doingfb.com",
+        "referer": "https://doingfb.com/",
         "x-csrf-token": csrf_token,
         "x-http-method-override": "PATCH"
     })
