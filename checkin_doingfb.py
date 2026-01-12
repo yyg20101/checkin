@@ -39,7 +39,7 @@ def get_initial_data(session):
     csrf_token = session_info.get("csrfToken")
 
     # 显示 session 信息
-    print(f"[LOG] Session 数据: userId={user_id}, csrfToken={csrf_token[:20] if csrf_token else 'N/A'}...")
+    print(f"[LOG] Session 数据: userId={user_id}, csrfToken={csrf_token if csrf_token else 'N/A'}...")
 
     if not user_id or not csrf_token:
         # 输出更详细的错误信息
@@ -99,7 +99,7 @@ def perform_checkin(session, user_id, csrf_token, allow_checkin, checkin_days_co
 
     # 打印响应详情以便调试
     print(f"[DEBUG] 响应状态码: {response.status_code}")
-    print(f"[DEBUG] 响应内容: {response.text[:500] if response.text else 'Empty'}")
+    print(f"[DEBUG] 响应内容: {response.text if response.text else 'Empty'}")
 
     response.raise_for_status()
     print("✅ 签到成功！正在解析返回的数据...")
@@ -159,11 +159,11 @@ if __name__ == "__main__":
                 if user_info and user_info.get("displayName"):
                     print(f"显示昵称: {user_info['displayName']}")
                     print(f"User ID: {user_info['id']}")
-                    print(f"当前金币: {user_info['money']}")
+                    print(f"当前硬币: {user_info['money']}")
                     # 输出标准化摘要
                     summary = {
                         "status": "success",
-                        "message": f"💰 签到成功，金币: {user_info['money']}",
+                        "message": f"💰 签到成功，硬币: {user_info['money']}",
                         "details": {"coins": user_info['money'], "display_name": user_info['displayName']}
                     }
                     print(f"[CHECKIN_SUMMARY] {json.dumps(summary, ensure_ascii=False)}")
