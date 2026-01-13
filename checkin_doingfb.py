@@ -139,9 +139,19 @@ if __name__ == "__main__":
     print(f"[LOG] 包含 flarum_remember: {has_remember}")
 
     with requests.Session() as s:
+        # 解析 Cookie 字符串为字典
+        cookie_dict = {}
+        for item in cookie.split(';'):
+            if '=' in item:
+                key, value = item.strip().split('=', 1)
+                cookie_dict[key] = value
+        
+        # 将 Cookie 添加到 Session 的 CookieJar 中，这样 requests 会自动管理 Cookie 更新
+        s.cookies.update(cookie_dict)
+
         # 设置请求头，完全模拟浏览器行为（使用小写 header 名称）
+        # 注意：不要在这里设置 "cookie" 头，否则会覆盖 CookieJar 的自动管理
         s.headers.update({
-            "cookie": cookie,
             "user-agent": "Mozilla/5.0 (Linux; Android 8.0.0; SM-G955U Build/R16NW) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Mobile Safari/537.36 Edg/143.0.0.0",
         })
 
