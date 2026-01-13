@@ -3,8 +3,8 @@ name: Daily Checkin
 on:
   workflow_dispatch: # 允许手动触发
   schedule:
-    # 设置在每天的 UTC 时间 22:00 运行 (对应中国时区 Asia/Shanghai 上午6点)
-    - cron: '0 22 * * *'
+    # 设置在每天的 UTC 时间 1:00 运行 (对应中国时区 Asia/Shanghai 上午9点)
+    - cron: '0 1 * * *'
 
 # 设置工作流权限，允许创建Release
 permissions:
