@@ -1,52 +1,87 @@
 # 自动签到脚本集合
 
-这个项目包含了多个网站的自动签到脚本，通过 GitHub Actions 实现每日自动执行。
+这个项目通过统一 runner 执行多个网站的自动签到任务，并由 GitHub Actions 每日自动运行、归档日志和生成执行摘要。
 
 ## 支持的网站
 
-1. **DoingFB** - 使用 `checkin_doingfb.py`
-2. **恩山无线论坛** - 使用 `checkin_enshan.py`
-3. **Hostloc** - 使用 `checkin_hostloc.py`
+1. **DoingFB**
+2. **恩山无线论坛**
+3. **Hostloc**
+4. **什么值得买**
 
-## 新版统一工作流
+## 项目结构
 
-### 优化特性
+```text
+checkin/
+  core/
+    config.py      # 读取并校验任务配置
+    result.py      # 统一签到结果与摘要格式
+    runner.py      # 任务筛选、执行、异常隔离和汇总输出
+  tasks/
+    doingfb.py
+    enshan.py
+    hostloc.py
+    smzdm.py
+run_checkin.py     # 统一命令行入口
+checkin_config.json
+```
 
-- **并行执行**: 使用 GitHub Actions 矩阵策略，多个签到任务并行执行
-- **性能优化**: 
-  - 启用 pip 缓存，减少依赖安装时间
-  - 限制最大并发数为 2，避免对目标网站造成压力
-  - 按需安装依赖，每个任务只安装必要的包
-- **容错机制**: 
-  - 单个任务失败不影响其他任务执行
-  - 失败时自动上传日志文件便于调试
-- **状态汇总**: 提供整体执行状态概览
+每个站点 task 暴露 `run(cookie: str) -> CheckinResult`。新增站点时，通常只需要新增一个 `checkin/tasks/*.py` 文件，并在 `checkin_config.json` 中添加一条配置。
 
-### 配置说明
+## 本地运行
+
+安装依赖：
+
+```bash
+python3 -m pip install -r requirements.txt
+```
+
+运行全部任务：
+
+```bash
+python3 run_checkin.py
+```
+
+只运行某一个任务：
+
+```bash
+python3 run_checkin.py --task smzdm
+```
+
+可用任务 id 由 `checkin_config.json` 中的 `id` 字段决定。
+
+## Secrets
 
 需要在 GitHub Secrets 中配置以下变量：
 
-- `COOKIE_DOINGFB` - DoingFB 网站的 Cookie
-- `COOKIE_ENSHAN` - 恩山论坛的 Cookie  
-- `COOKIE_HOSTLOC` - Hostloc 论坛的 Cookie
+- `COOKIE_DOINGFB`
+- `COOKIE_ENSHAN`
+- `COOKIE_HOSTLOC`
+- `COOKIE_SMZDM`
 
-### 执行时间
+本地调试时，可以通过同名环境变量传入 Cookie。
 
-- **自动执行**: 每天 UTC 22:00 (北京时间上午 6:00)
-- **手动触发**: 支持在 GitHub Actions 页面手动运行
+## GitHub Actions
 
-### 工作流文件
+工作流文件：
 
-- **新版统一工作流**: `.github/workflows/unified_daily_checkin.yml`
+- `.github/workflows/daily_checkin.yml`
 
-## 依赖说明
+执行时间：
 
-- `requests` - HTTP 请求库
-- `curl_cffi[requests]` - 模拟浏览器请求，防止被反爬虫检测
+- 自动执行：每天 UTC 1:00，对应北京时间上午 9:00
+- 手动触发：支持在 GitHub Actions 页面手动运行
 
-## 使用方法
+执行方式：
 
-1. Fork 这个仓库
-2. 在仓库设置中添加必要的 Secrets
-3. 启用 GitHub Actions
-4. 工作流将自动每日执行，或可手动触发
+- GitHub Actions 调用 `python run_checkin.py`
+- runner 会继续执行后续任务，即使单个站点失败
+- 每个任务都会输出 `[CHECKIN_SUMMARY]` JSON 摘要
+- workflow 会上传日志 artifact，并创建当天的 Release 摘要
+
+## 依赖
+
+- `requests`
+- `curl_cffi`
+- `beautifulsoup4`
+- `pytest`

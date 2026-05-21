@@ -1,7 +1,4 @@
 requests
-curl_cffi[requests]
-selenium
-webdriver-manager
-playwright
-nodriver
+curl_cffi
 beautifulsoup4
+pytest

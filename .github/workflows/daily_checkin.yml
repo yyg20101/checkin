@@ -21,6 +21,7 @@ jobs:
       COOKIE_DOINGFB: ${{ secrets.COOKIE_DOINGFB }}
       COOKIE_ENSHAN: ${{ secrets.COOKIE_ENSHAN }}
       COOKIE_HOSTLOC: ${{ secrets.COOKIE_HOSTLOC }}
+      COOKIE_SMZDM: ${{ secrets.COOKIE_SMZDM }}
     
     steps:
       - name: Checkout repository
@@ -43,89 +44,84 @@ jobs:
           DATE=$(date +%Y%m%d)
           DATETIME=$(date '+%Y-%m-%d %H:%M:%S %Z')
           mkdir -p checkin-logs
-          
-          # 初始化统计变量
-          TOTAL_TASKS=0
-          SUCCESS_TASKS=0
-          TASK_RESULTS=""
-          
+          LOG_FILE="checkin-logs/all-${DATE}.log"
+
           echo "🚀 开始执行签到任务..."
           echo "📅 执行时间: $DATETIME (中国时区)"
           echo ""
-          
-          # 遍历配置执行每个任务
-          while read -r task; do
-            name=$(echo "$task" | jq -r '.name')
-            script=$(echo "$task" | jq -r '.script')
-            cookie_secret=$(echo "$task" | jq -r '.cookie_secret')
-            
-            LOG_FILE="checkin-logs/${name}-${DATE}.log"
-            TOTAL_TASKS=$((TOTAL_TASKS + 1))
-            
-            echo "=========================================="
-            echo "🔄 [$TOTAL_TASKS] 开始执行 $name 签到..."
-            echo "=========================================="
-            
-            # 添加日志头部信息
-            echo "=== $name 签到任务日志 ===" > "$LOG_FILE"
-            echo "执行时间: $DATETIME (中国时区)" >> "$LOG_FILE"
-            echo "任务脚本: $script" >> "$LOG_FILE"
-            echo "========================================" >> "$LOG_FILE"
-            echo "" >> "$LOG_FILE"
-            
-            # 执行脚本并记录输出
-            # 使用间接引用获取对应的 Cookie 值
-            export COOKIE_VALUE="${!cookie_secret}"
-            python "$script" 2>&1 | tee -a "$LOG_FILE"
-            EXIT_CODE=${PIPESTATUS[0]}
-            
-            # 记录任务完成时间和退出状态
-            echo "" >> "$LOG_FILE"
-            echo "========================================" >> "$LOG_FILE"
-            echo "任务完成时间: $(date '+%Y-%m-%d %H:%M:%S %Z') (中国时区)" >> "$LOG_FILE"
-            echo "退出状态码: $EXIT_CODE" >> "$LOG_FILE"
-            
-            # 提取标准化摘要
-            result_info=""
-            if grep -q "\[CHECKIN_SUMMARY\]" "$LOG_FILE"; then
-              summary_json=$(grep "\[CHECKIN_SUMMARY\]" "$LOG_FILE" | tail -1 | sed 's/.*\[CHECKIN_SUMMARY\] //')
-              result_info=$(echo "$summary_json" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('message',''))" 2>/dev/null || echo "")
-            fi
-            
-            # 记录任务结果
-            if [ $EXIT_CODE -eq 0 ]; then
-              echo "✅ $name 执行成功"
-              SUCCESS_TASKS=$((SUCCESS_TASKS + 1))
-              TASK_RESULTS="${TASK_RESULTS}**${name}:** ✅ 成功\n"
-            else
-              echo "❌ $name 执行失败 (状态码: $EXIT_CODE)"
-              TASK_RESULTS="${TASK_RESULTS}**${name}:** ❌ 失败\n"
-            fi
-            
-            if [ -n "$result_info" ]; then
-              TASK_RESULTS="${TASK_RESULTS}  - ${result_info}\n"
-            fi
-            TASK_RESULTS="${TASK_RESULTS}\n"
-            
+
+          {
+            echo "=== 签到任务日志 ==="
+            echo "执行时间: $DATETIME (中国时区)"
+            echo "任务入口: run_checkin.py"
+            echo "========================================"
             echo ""
-          done < <(jq -c '.checkin_tasks[]' checkin_config.json)
-          
+          } > "$LOG_FILE"
+
+          set +e
+          python run_checkin.py 2>&1 | tee -a "$LOG_FILE"
+          EXIT_CODE=${PIPESTATUS[0]}
+          set -e
+
+          {
+            echo ""
+            echo "========================================"
+            echo "任务完成时间: $(date '+%Y-%m-%d %H:%M:%S %Z') (中国时区)"
+            echo "退出状态码: $EXIT_CODE"
+          } >> "$LOG_FILE"
+
+          python3 - "$LOG_FILE" "$GITHUB_ENV" <<'PY'
+          import json
+          import sys
+
+          log_path = sys.argv[1]
+          env_path = sys.argv[2]
+          summaries = []
+          with open(log_path, encoding="utf-8") as log_file:
+              for line in log_file:
+                  if "[CHECKIN_SUMMARY]" not in line:
+                      continue
+                  payload = line.split("[CHECKIN_SUMMARY]", 1)[1].strip()
+                  summaries.append(json.loads(payload))
+
+          total_tasks = len(summaries)
+          success_tasks = sum(1 for item in summaries if item.get("status") == "success")
+          result_lines = []
+          for item in summaries:
+              details = item.get("details") or {}
+              task_name = details.get("task_name") or details.get("task_id") or "任务"
+              status = item.get("status")
+              if status == "success":
+                  status_text = "✅ 成功"
+              elif status == "skipped":
+                  status_text = "⏭️ 跳过"
+              else:
+                  status_text = "❌ 失败"
+              result_lines.append(f"**{task_name}:** {status_text}")
+              message = item.get("message")
+              if message:
+                  result_lines.append(f"  - {message}")
+              result_lines.append("")
+
+          with open(env_path, "a", encoding="utf-8") as env_file:
+              env_file.write(f"TOTAL_TASKS={total_tasks}\n")
+              env_file.write(f"SUCCESS_TASKS={success_tasks}\n")
+              env_file.write("TASK_RESULTS<<EOF\n")
+              env_file.write("\n".join(result_lines))
+              env_file.write("\nEOF\n")
+          PY
+
+          TOTAL_TASKS=$(grep '^TOTAL_TASKS=' "$GITHUB_ENV" | tail -1 | cut -d= -f2)
+          SUCCESS_TASKS=$(grep '^SUCCESS_TASKS=' "$GITHUB_ENV" | tail -1 | cut -d= -f2)
           echo "=========================================="
           echo "📊 所有任务执行完成"
           echo "   总任务: $TOTAL_TASKS, 成功: $SUCCESS_TASKS, 失败: $((TOTAL_TASKS - SUCCESS_TASKS))"
           echo "=========================================="
-          
+
           # 保存变量供后续步骤使用
           echo "DATE=$DATE" >> $GITHUB_ENV
           echo "DATETIME=$DATETIME" >> $GITHUB_ENV
-          echo "TOTAL_TASKS=$TOTAL_TASKS" >> $GITHUB_ENV
-          echo "SUCCESS_TASKS=$SUCCESS_TASKS" >> $GITHUB_ENV
-          # 使用多行变量语法
-          {
-            echo "TASK_RESULTS<<EOF"
-            echo -e "$TASK_RESULTS"
-            echo "EOF"
-          } >> $GITHUB_ENV
+          echo "CHECKIN_EXIT_CODE=$EXIT_CODE" >> $GITHUB_ENV
 
       - name: Create release summary
         run: |
@@ -195,3 +191,9 @@ jobs:
             echo "❌ Release创建失败"
             echo "🔍 请检查GitHub Actions日志获取详细错误信息"
           fi
+
+      - name: Fail workflow if checkins failed
+        if: ${{ env.CHECKIN_EXIT_CODE != '0' }}
+        run: |
+          echo "❌ 存在签到任务失败，请查看 Release 摘要或日志附件。"
+          exit 1
