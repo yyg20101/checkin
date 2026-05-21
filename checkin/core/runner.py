@@ -11,6 +11,7 @@ from checkin.core.result import CheckinResult
 
 
 ImportModule = Callable[[str], ModuleType]
+VALID_STATUSES = {"success", "failed", "skipped"}
 
 
 @dataclass(frozen=True)
@@ -42,6 +43,8 @@ def run_tasks(
             result = module.run(cookie)
             if not isinstance(result, CheckinResult):
                 result = CheckinResult.failed(f"{config.name} 返回了无效结果类型")
+            elif result.status not in VALID_STATUSES:
+                result = CheckinResult.failed(f"{config.name} 返回了无效状态: {result.status}")
         except Exception as exc:
             result = CheckinResult.failed(f"{config.name} 执行失败: {exc}")
         runs.append(TaskRun(config=config, result=result))

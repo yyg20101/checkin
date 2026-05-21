@@ -47,3 +47,17 @@ def test_run_tasks_isolates_task_exception(monkeypatch):
 
     assert results[0].result.status == "failed"
     assert "site changed" in results[0].result.message
+
+
+def test_run_tasks_rejects_invalid_result_status(monkeypatch):
+    configs = [TaskConfig("one", "One", "checkin.tasks.one", "COOKIE_ONE")]
+    monkeypatch.setenv("COOKIE_ONE", "cookie-one")
+
+    def fake_import(module_name):
+        return types.SimpleNamespace(run=lambda cookie: CheckinResult(status="error", message="bad"))
+
+    results = run_tasks(configs, import_module=fake_import)
+
+    assert results[0].result.status == "failed"
+    assert "无效状态" in results[0].result.message
+    assert "error" in results[0].result.message
