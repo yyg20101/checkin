@@ -19,7 +19,6 @@ jobs:
       TZ: Asia/Shanghai
       # 所有 Cookie Secrets 传递到环境变量
       COOKIE_DOINGFB: ${{ secrets.COOKIE_DOINGFB }}
-      COOKIE_ENSHAN: ${{ secrets.COOKIE_ENSHAN }}
       COOKIE_HOSTLOC: ${{ secrets.COOKIE_HOSTLOC }}
       COOKIE_SMZDM: ${{ secrets.COOKIE_SMZDM }}
     
@@ -74,6 +73,75 @@ jobs:
           import json
           import sys
 
+          DETAIL_LABELS = {
+              "activity": "活动详情",
+              "coins": "硬币/金币",
+              "consecutive_days": "连续签到天数",
+              "display_name": "用户名",
+              "money": "金钱",
+              "points": "积分",
+              "prestige": "威望",
+              "rewards": "奖励详情",
+              "sign_result": "签到结果",
+              "task_id": "任务 ID",
+              "task_name": "任务名称",
+              "uid": "UID",
+              "user_group": "用户组",
+              "username": "用户名",
+          }
+          INTERNAL_DETAIL_KEYS = {"task_id", "task_name"}
+
+
+          def clean_scalar(value):
+              if value is None:
+                  return ""
+              return str(value).replace("\r", " ").replace("\n", " ").strip()
+
+
+          def detail_label(key):
+              return DETAIL_LABELS.get(key, key)
+
+
+          def render_mapping(mapping):
+              if not mapping:
+                  return ""
+              if set(mapping).issuperset({"name", "value"}):
+                  name = clean_scalar(mapping.get("name"))
+                  value = clean_scalar(mapping.get("value"))
+                  return f"{name}: {value}" if name else value
+              parts = []
+              for key, value in mapping.items():
+                  rendered = render_detail(value)
+                  if rendered:
+                      parts.append(f"{detail_label(key)}: {rendered}")
+              return "，".join(parts)
+
+
+          def render_detail(value):
+              if isinstance(value, dict):
+                  return render_mapping(value)
+              if isinstance(value, list):
+                  rendered_items = [render_detail(item) for item in value]
+                  return "\n".join(item for item in rendered_items if item)
+              return clean_scalar(value)
+
+
+          def append_detail_lines(result_lines, details):
+              for key, value in details.items():
+                  if key in INTERNAL_DETAIL_KEYS:
+                      continue
+                  rendered = render_detail(value)
+                  if not rendered:
+                      continue
+                  label = detail_label(key)
+                  if "\n" in rendered:
+                      result_lines.append(f"  - **{label}:**")
+                      for line in rendered.splitlines():
+                          result_lines.append(f"    - {line}")
+                  else:
+                      result_lines.append(f"  - **{label}:** {rendered}")
+
+
           log_path = sys.argv[1]
           env_path = sys.argv[2]
           summaries = []
@@ -101,6 +169,7 @@ jobs:
               message = item.get("message")
               if message:
                   result_lines.append(f"  - {message}")
+              append_detail_lines(result_lines, details)
               result_lines.append("")
 
           with open(env_path, "a", encoding="utf-8") as env_file:

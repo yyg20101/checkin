@@ -3,12 +3,13 @@
 ## 1. Executive Summary
 
 - **Problem Statement**: 当前项目由多个独立签到脚本组成，每个脚本重复处理 Cookie 读取、异常捕获、日志输出和结果摘要，新增站点会继续复制这些样板逻辑。GitHub Actions 依赖脚本各自约定输出，失败原因和本地单任务调试也不够集中。
-- **Proposed Solution**: 引入轻量模块化 Task 架构：站点逻辑只负责请求和解析，统一 runner 负责配置加载、环境变量读取、异常隔离、任务筛选和 `[CHECKIN_SUMMARY]` 输出。同时新增什么值得买（SMZDM）签到 task，并接入现有每日执行流程。
+- **Proposed Solution**: 引入轻量模块化 Task 架构：站点逻辑只负责请求和解析，统一 runner 负责配置加载、环境变量读取、异常隔离、任务筛选和 `[CHECKIN_SUMMARY]` 输出。同时新增什么值得买（SMZDM）签到 task，并接入现有每日执行流程；恩山 task 保留为已实现但暂不纳入每日统一任务。
 - **Success Criteria**:
   - 新增站点只需新增 1 个 task 模块和 1 条 `checkin_config.json` 配置，不需要复制 runner/CI 汇总代码。
   - `python run_checkin.py --task smzdm` 可只执行 SMZDM，退出码和摘要可用于本地调试。
   - 任意单站点执行失败时，runner 继续执行后续任务，并在最终汇总中标记失败站点和失败原因。
-  - 所有任务保持统一 `[CHECKIN_SUMMARY]` JSON 输出，现有 GitHub Actions 日志汇总语义不退化。
+  - 所有任务保持统一 `[CHECKIN_SUMMARY]` JSON 输出，GitHub Actions Release 摘要展示每个任务的状态、主消息和 `details` 明细。
+  - 每日 Release 摘要可直接查看各站点积分、连续签到、奖励、活动结果或失败原因，不必只依赖完整日志附件排查。
   - Cookie、请求头等敏感值不在正常日志中完整打印。
 
 ## 2. User Experience & Functionality
@@ -21,6 +22,7 @@
 - **User Stories**:
   - As a maintainer, I want each site check-in to implement the same task interface so that adding a new site does not require copying runner logic.
   - As an automation user, I want one site failure to be isolated so that other check-ins still run.
+  - As an automation user, I want the daily release to show detailed per-site check-in results so that I can review all account changes in one place.
   - As a local debugger, I want to run a single named task so that I can validate one site's Cookie or request flow quickly.
   - As an SMZDM user, I want SMZDM included in the daily check-in list so that it is executed with the same schedule and summary reporting.
 
@@ -28,10 +30,12 @@
   - Task modules expose a uniform callable such as `run(cookie: str) -> CheckinResult`.
   - `CheckinResult` contains `status`, `message`, and `details`, and can serialize to the existing `[CHECKIN_SUMMARY]` JSON format.
   - `run_checkin.py` supports running all configured tasks and running one task by id.
-  - `checkin_config.json` includes `doingfb`, `enshan`, `hostloc`, and `smzdm` task declarations with display name, module path, and Secret name.
+  - `checkin_config.json` includes the currently enabled daily tasks: `doingfb`, `hostloc`, and `smzdm`.
+  - `checkin/tasks/enshan.py` remains available for manual or future enablement, but `enshan` is intentionally absent from `checkin_config.json` until the maintainer opts it into daily execution.
   - SMZDM uses `COOKIE_SMZDM` and returns a success summary for already-signed or newly-signed states when the upstream API reports a non-fatal result.
   - Missing Cookie or unexpected task exceptions are reported as task-level failures without preventing later tasks from running.
-  - GitHub Actions invokes the unified runner and passes `COOKIE_SMZDM` along with existing Cookie Secrets.
+  - GitHub Actions invokes the unified runner and passes Cookie Secrets for enabled tasks.
+  - GitHub Actions Release summaries render non-sensitive `details` fields for each task.
 
 - **Non-Goals**:
   - Do not build a database, web UI, notification bot, or account management system.
@@ -51,11 +55,11 @@
   - `checkin/core/result.py` defines `CheckinResult` and summary serialization.
   - `checkin/core/config.py` loads and validates `checkin_config.json`.
   - `checkin/core/runner.py` resolves task modules, reads the configured Cookie environment variable, runs each task, catches exceptions, and prints summaries.
-  - `checkin/tasks/*.py` contains site-specific logic for DoingFB, Enshan, Hostloc, and SMZDM.
+  - `checkin/tasks/*.py` contains site-specific logic for DoingFB, Enshan, Hostloc, and SMZDM; only tasks listed in `checkin_config.json` run in the daily workflow.
   - Existing one-off scripts can either become thin wrappers around the task modules or be replaced by the unified runner after the workflow is updated.
 
 - **Integration Points**:
-  - GitHub Secrets: existing `COOKIE_DOINGFB`, `COOKIE_ENSHAN`, `COOKIE_HOSTLOC`; new `COOKIE_SMZDM`.
+  - GitHub Secrets: enabled daily tasks require `COOKIE_DOINGFB`, `COOKIE_HOSTLOC`, and `COOKIE_SMZDM`; `COOKIE_ENSHAN` is optional while Enshan stays out of the unified daily config.
   - GitHub Actions: `.github/workflows/daily_checkin.yml` installs dependencies, exports Cookie Secrets, calls `python run_checkin.py`, archives generated logs, and creates the release summary.
   - SMZDM APIs adapted from upstream:
     - `https://user-api.smzdm.com/robot/token`
@@ -72,13 +76,12 @@
 ## 5. Risks & Roadmap
 
 - **Phased Rollout**:
-  - **MVP**: Introduce core result/config/runner modules, migrate existing three tasks, add SMZDM task, update config and workflow.
-  - **v1.1**: Add focused unit tests for config loading, task selection, exception handling, and summary serialization.
-  - **v2.0**: Consider matrix-based GitHub Actions parallelization if runtime or failure isolation becomes a stronger requirement.
+  - **MVP**: Introduce core result/config/runner modules, migrate enabled tasks, add SMZDM task, update config and workflow.
+  - **v1.1**: Render detailed per-task `details` fields in the daily Release summary and document the new-site task template.
+  - **v2.0**: Continue expanding supported sites; consider matrix-based GitHub Actions parallelization if runtime or failure isolation becomes a stronger requirement.
 
 - **Technical Risks**:
   - Third-party site HTML/API responses may change without notice, especially SMZDM reward/account parsing.
   - SMZDM activity draw may fail independently from normal check-in; it should not block the main sign-in result.
   - Existing scripts print verbose debug output, including request headers in some paths; migration must reduce sensitive log exposure.
   - GitHub Actions release-summary behavior depends on consistent summary output; runner changes must preserve parseable JSON summaries.
-

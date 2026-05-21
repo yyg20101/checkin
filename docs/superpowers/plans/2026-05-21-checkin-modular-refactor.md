@@ -19,15 +19,15 @@
 - Create `checkin/core/runner.py`: task import, cookie lookup, exception isolation, CLI orchestration helpers.
 - Create `checkin/tasks/__init__.py`: task package marker.
 - Create `checkin/tasks/doingfb.py`: DoingFB task logic migrated from `checkin_doingfb.py`.
-- Create `checkin/tasks/enshan.py`: Enshan task logic migrated from `checkin_enshan.py`.
+- Create `checkin/tasks/enshan.py`: Enshan task logic migrated from `checkin_enshan.py`, retained for manual or future enablement.
 - Create `checkin/tasks/hostloc.py`: Hostloc task logic migrated from `checkin_hostloc.py`.
 - Create `checkin/tasks/smzdm.py`: SMZDM task adapted from upstream `dailycheckin/smzdm/main.py`.
 - Create `run_checkin.py`: command-line entrypoint.
 - Create `tests/test_result.py`: unit tests for summary serialization.
 - Create `tests/test_config.py`: unit tests for config loading and validation.
 - Create `tests/test_runner.py`: unit tests for task filtering, missing cookie handling, and exception isolation.
-- Modify `checkin_config.json`: change entries to task id/display/module/secret format and add SMZDM.
-- Modify `.github/workflows/daily_checkin.yml`: export `COOKIE_SMZDM`, run `python run_checkin.py`, keep log archive and release summary.
+- Modify `checkin_config.json`: change entries to task id/display/module/secret format and add SMZDM; keep Enshan out of the unified daily task list until explicitly enabled.
+- Modify `.github/workflows/daily_checkin.yml`: export enabled-task Cookie secrets, run `python run_checkin.py`, keep log archive and release summary with per-task details.
 - Modify `requirements.txt`: add `pytest`, remove unused browser automation dependencies unless kept for unrelated user workflows.
 - Modify `README.md`: document unified runner, local single-task execution, and `COOKIE_SMZDM`.
 - Modify existing `checkin_*.py` scripts: keep as thin compatibility wrappers or remove references from docs/workflow. Use thin wrappers to reduce breakage.
@@ -286,7 +286,7 @@ def _parse_task(raw_task: Any, index: int) -> TaskConfig:
 
 - [ ] **Step 4: Update `checkin_config.json`**
 
-Replace `checkin_config.json` with:
+Replace `checkin_config.json` with the currently enabled daily tasks:
 
 ```json
 {
@@ -296,12 +296,6 @@ Replace `checkin_config.json` with:
       "name": "DoingFB",
       "module": "checkin.tasks.doingfb",
       "cookie_secret": "COOKIE_DOINGFB"
-    },
-    {
-      "id": "enshan",
-      "name": "Enshan",
-      "module": "checkin.tasks.enshan",
-      "cookie_secret": "COOKIE_ENSHAN"
     },
     {
       "id": "hostloc",
