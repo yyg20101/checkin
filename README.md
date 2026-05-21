@@ -100,7 +100,29 @@ python3 run_checkin.py --task smzdm
 }
 ```
 
-如果一个网站需要多个账号，可以改成 `accounts`：
+推荐在 GitHub Actions 中继续只配置一个 Secret，例如 `COOKIE_V2EX`，再通过 Secret 值里的特殊分隔符区分单账号和多账号。
+
+单账号时，Secret 值直接填 Cookie：
+
+```text
+foo=bar; session=xxx
+```
+
+多账号时，账号之间用 `---CHECKIN_ACCOUNT---` 分隔：
+
+```text
+foo=bar; session=xxx---CHECKIN_ACCOUNT---foo=bar; session=yyy
+```
+
+如果希望 Release 摘要显示账号名，可以在每个账号前加上账号名，并用 `---CHECKIN_COOKIE---` 分隔账号名和 Cookie：
+
+```text
+主账号---CHECKIN_COOKIE---foo=bar; session=xxx---CHECKIN_ACCOUNT---备用账号---CHECKIN_COOKIE---foo=bar; session=yyy
+```
+
+runner 只有在 Secret 值包含 `---CHECKIN_ACCOUNT---` 或 `---CHECKIN_COOKIE---` 时才按多账号解析；普通 Cookie 会保持单账号流程。
+
+也可以使用 `accounts` 配置多个不同的 Secret 变量：
 
 ```json
 {
@@ -121,6 +143,8 @@ python3 run_checkin.py --task smzdm
   ]
 }
 ```
+
+这种方式需要同时在 `.github/workflows/daily_checkin.yml` 的 `env` 中显式暴露每个 Secret。GitHub Actions 不会自动把所有仓库 Secrets 作为环境变量传给脚本。
 
 runner 会把每个账号作为独立执行单元输出摘要，例如 `V2EX / 主账号`、`V2EX / 备用账号`。单个账号失败不会阻止同站点其他账号或其他站点继续执行。Release 摘要会展示账号名称和 Secret 变量名，但不会打印 Cookie 内容。
 

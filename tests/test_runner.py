@@ -2,7 +2,12 @@ import types
 
 from checkin.core.config import AccountConfig, TaskConfig
 from checkin.core.result import CheckinResult
-from checkin.core.runner import print_task_runs, run_tasks
+from checkin.core.runner import (
+    SECRET_ACCOUNT_NAME_SEPARATOR,
+    SECRET_ACCOUNT_SEPARATOR,
+    print_task_runs,
+    run_tasks,
+)
 
 
 def test_run_tasks_filters_by_task_id(monkeypatch):
@@ -59,6 +64,59 @@ def test_run_tasks_expands_multiple_accounts(monkeypatch):
         ("main", "ran cookie-main"),
         ("alt", "ran cookie-alt"),
     ]
+
+
+def test_run_tasks_expands_multiple_accounts_from_one_secret(monkeypatch):
+    configs = [TaskConfig("one", "One", "checkin.tasks.one", "COOKIE_ONE")]
+    monkeypatch.setenv("COOKIE_ONE", f"cookie-main{SECRET_ACCOUNT_SEPARATOR}cookie-alt")
+
+    def fake_import(module_name):
+        return types.SimpleNamespace(run=lambda cookie: CheckinResult.success(f"ran {cookie}"))
+
+    results = run_tasks(configs, import_module=fake_import)
+
+    assert [(item.account.id, item.account.name, item.result.message) for item in results] == [
+        ("default-1", "账号 1", "ran cookie-main"),
+        ("default-2", "账号 2", "ran cookie-alt"),
+    ]
+
+
+def test_run_tasks_expands_named_accounts_from_one_secret(monkeypatch):
+    configs = [TaskConfig("one", "One", "checkin.tasks.one", "COOKIE_ONE")]
+    monkeypatch.setenv(
+        "COOKIE_ONE",
+        (
+            f"主账号{SECRET_ACCOUNT_NAME_SEPARATOR}cookie-main"
+            f"{SECRET_ACCOUNT_SEPARATOR}"
+            f"备用账号{SECRET_ACCOUNT_NAME_SEPARATOR}cookie-alt"
+        ),
+    )
+
+    def fake_import(module_name):
+        return types.SimpleNamespace(run=lambda cookie: CheckinResult.success(f"ran {cookie}"))
+
+    results = run_tasks(configs, import_module=fake_import)
+
+    assert [(item.account.id, item.account.name, item.result.message) for item in results] == [
+        ("default-1", "主账号", "ran cookie-main"),
+        ("default-2", "备用账号", "ran cookie-alt"),
+    ]
+
+
+def test_run_tasks_reports_one_secret_multi_account_format_error(monkeypatch):
+    configs = [TaskConfig("one", "One", "checkin.tasks.one", "COOKIE_ONE")]
+    monkeypatch.setenv("COOKIE_ONE", f"主账号{SECRET_ACCOUNT_NAME_SEPARATOR}")
+
+    def fake_import(module_name):
+        return types.SimpleNamespace(run=lambda cookie: CheckinResult.success(f"ran {cookie}"))
+
+    results = run_tasks(configs, import_module=fake_import)
+
+    assert len(results) == 1
+    assert results[0].result.status == "failed"
+    assert "COOKIE_ONE 多账号格式错误" in results[0].result.message
+    assert "Cookie 为空" in results[0].result.message
+    assert "主账号" not in results[0].result.message
 
 
 def test_run_tasks_isolates_missing_cookie_by_account(monkeypatch):
