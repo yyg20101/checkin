@@ -7,12 +7,6 @@
       "cookie_secret": "COOKIE_DOINGFB"
     },
     {
-      "id": "enshan",
-      "name": "Enshan",
-      "module": "checkin.tasks.enshan",
-      "cookie_secret": "COOKIE_ENSHAN"
-    },
-    {
       "id": "hostloc",
       "name": "Hostloc",
       "module": "checkin.tasks.hostloc",
