@@ -1,19 +1,28 @@
 {
-    "checkin_tasks": [
-        {
-            "name": "DoingFB",
-            "script": "checkin_doingfb.py",
-            "cookie_secret": "COOKIE_DOINGFB"
-        },
-        {
-            "name": "Enshan",
-            "script": "checkin_enshan.py",
-            "cookie_secret": "COOKIE_ENSHAN"
-        },
-        {
-            "name": "Hostloc",
-            "script": "checkin_hostloc.py",
-            "cookie_secret": "COOKIE_HOSTLOC"
-        }
-    ]
+  "checkin_tasks": [
+    {
+      "id": "doingfb",
+      "name": "DoingFB",
+      "module": "checkin.tasks.doingfb",
+      "cookie_secret": "COOKIE_DOINGFB"
+    },
+    {
+      "id": "enshan",
+      "name": "Enshan",
+      "module": "checkin.tasks.enshan",
+      "cookie_secret": "COOKIE_ENSHAN"
+    },
+    {
+      "id": "hostloc",
+      "name": "Hostloc",
+      "module": "checkin.tasks.hostloc",
+      "cookie_secret": "COOKIE_HOSTLOC"
+    },
+    {
+      "id": "smzdm",
+      "name": "什么值得买",
+      "module": "checkin.tasks.smzdm",
+      "cookie_secret": "COOKIE_SMZDM"
+    }
+  ]
 }
