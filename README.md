@@ -15,7 +15,7 @@
 
 已实现但暂不纳入统一每日任务：
 
-- **恩山无线论坛**：已按 qd-today HAR 流程更新 `checkin/tasks/enshan.py`，保留 `checkin_enshan.py` 兼容入口，后续需要时再加入 `checkin_config.json`。
+- **恩山无线论坛**：已按 qd-today HAR 流程更新 `checkin/tasks/enshan.py`，保留 `legacy/checkin_enshan.py` 兼容入口，后续需要时再加入 `checkin_config.json`。
 
 ## 项目结构
 
@@ -33,6 +33,14 @@ checkin/
     hostloc.py
     smzdm.py
     v2ex.py
+legacy/
+  checkin_doingfb.py   # 旧单站点兼容入口
+  checkin_enshan.py
+  checkin_hostloc.py
+tools/
+  cocos_file_copy.py   # 非签到主链路工具脚本
+  driver_options.py
+  lsb.py
 run_checkin.py     # 统一命令行入口
 checkin_config.json
 ```
@@ -65,20 +73,64 @@ python3 run_checkin.py --task smzdm
 
 ## Secrets
 
-需要在 GitHub Secrets 中配置以下变量：
+需要在 GitHub Secrets 中配置的变量与网站对应关系如下：
 
-- `COOKIE_BINMT`
-- `COOKIE_DOINGFB`
-- `COOKIE_HIFITI`
-- `COOKIE_HOSTLOC`
-- `COOKIE_SMZDM`
-- `COOKIE_V2EX`
-
-可选变量：
-
-- `COOKIE_ENSHAN`：仅在手动运行 `checkin_enshan.py` 或未来把恩山加入 `checkin_config.json` 时需要。
+| Secret 变量 | 网站 | task id | 当前状态 |
+| --- | --- | --- | --- |
+| `COOKIE_DOINGFB` | DoingFB | `doingfb` | 每日任务 |
+| `COOKIE_HOSTLOC` | Hostloc | `hostloc` | 每日任务 |
+| `COOKIE_HIFITI` | Hifiti | `hifiti` | 每日任务 |
+| `COOKIE_BINMT` | MT管理器论坛 | `binmt` | 每日任务 |
+| `COOKIE_V2EX` | V2EX | `v2ex` | 每日任务 |
+| `COOKIE_SMZDM` | 什么值得买 | `smzdm` | 每日任务 |
+| `COOKIE_ENSHAN` | 恩山无线论坛 | `enshan` | 可选，暂不进入每日任务 |
 
 本地调试时，可以通过同名环境变量传入 Cookie。
+
+## 多账号配置
+
+`checkin_config.json` 同时支持旧的单账号格式和新的多账号格式。旧格式会自动当作一个默认账号执行：
+
+```json
+{
+  "id": "v2ex",
+  "name": "V2EX",
+  "module": "checkin.tasks.v2ex",
+  "cookie_secret": "COOKIE_V2EX"
+}
+```
+
+如果一个网站需要多个账号，可以改成 `accounts`：
+
+```json
+{
+  "id": "v2ex",
+  "name": "V2EX",
+  "module": "checkin.tasks.v2ex",
+  "accounts": [
+    {
+      "id": "main",
+      "name": "主账号",
+      "cookie_secret": "COOKIE_V2EX"
+    },
+    {
+      "id": "alt",
+      "name": "备用账号",
+      "cookie_secret": "COOKIE_V2EX_ALT"
+    }
+  ]
+}
+```
+
+runner 会把每个账号作为独立执行单元输出摘要，例如 `V2EX / 主账号`、`V2EX / 备用账号`。单个账号失败不会阻止同站点其他账号或其他站点继续执行。Release 摘要会展示账号名称和 Secret 变量名，但不会打印 Cookie 内容。
+
+## 根目录整理
+
+主流程只需要根目录的 `run_checkin.py`、`checkin_config.json`、`requirements.txt` 和项目文档。
+
+- `checkin_*.py` 旧入口不参与 GitHub Actions，也不被统一 runner 引用；它们已移到 `legacy/`，只用于兼容手动单站点运行。
+- `lsb.py`、`cocos_file_copy.py`、`driver_options.py` 不属于签到主链路；它们已移到 `tools/`。
+- 新增站点请优先放在 `checkin/tasks/`，并通过 `checkin_config.json` 接入。
 
 ## GitHub Actions
 

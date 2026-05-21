@@ -77,9 +77,12 @@ jobs:
           import sys
 
           DETAIL_LABELS = {
+              "account_id": "账号 ID",
+              "account_name": "账号名称",
               "activity": "活动详情",
               "coins": "硬币/金币",
               "consecutive_days": "连续签到天数",
+              "cookie_secret": "Secret 变量",
               "display_name": "用户名",
               "money": "金钱",
               "points": "积分",
@@ -92,7 +95,7 @@ jobs:
               "user_group": "用户组",
               "username": "用户名",
           }
-          INTERNAL_DETAIL_KEYS = {"task_id", "task_name"}
+          INTERNAL_DETAIL_KEYS = {"task_id", "task_name", "account_id"}
 
 
           def clean_scalar(value):
@@ -161,6 +164,8 @@ jobs:
           for item in summaries:
               details = item.get("details") or {}
               task_name = details.get("task_name") or details.get("task_id") or "任务"
+              account_name = details.get("account_name")
+              display_name = f"{task_name} / {account_name}" if account_name else task_name
               status = item.get("status")
               if status == "success":
                   status_text = "✅ 成功"
@@ -168,7 +173,7 @@ jobs:
                   status_text = "⏭️ 跳过"
               else:
                   status_text = "❌ 失败"
-              result_lines.append(f"**{task_name}:** {status_text}")
+              result_lines.append(f"**{display_name}:** {status_text}")
               message = item.get("message")
               if message:
                   result_lines.append(f"  - {message}")

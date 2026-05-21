@@ -48,6 +48,8 @@ def run(cookie: str) -> CheckinResult:
 
 ## 配置示例
 
+单账号配置：
+
 ```json
 {
   "id": "example",
@@ -56,6 +58,30 @@ def run(cookie: str) -> CheckinResult:
   "cookie_secret": "COOKIE_EXAMPLE"
 }
 ```
+
+多账号配置：
+
+```json
+{
+  "id": "example",
+  "name": "Example",
+  "module": "checkin.tasks.example",
+  "accounts": [
+    {
+      "id": "main",
+      "name": "主账号",
+      "cookie_secret": "COOKIE_EXAMPLE"
+    },
+    {
+      "id": "alt",
+      "name": "备用账号",
+      "cookie_secret": "COOKIE_EXAMPLE_ALT"
+    }
+  ]
+}
+```
+
+旧的 `cookie_secret` 单账号格式仍可用；需要同站点多账号时改用 `accounts`。每个账号会独立执行并输出摘要。
 
 ## `details` 字段建议
 
