@@ -17,7 +17,12 @@ class TaskConfig:
 def load_task_configs(path: str | Path = "checkin_config.json") -> list[TaskConfig]:
     config_path = Path(path)
     data = json.loads(config_path.read_text(encoding="utf-8"))
-    raw_tasks = data.get("checkin_tasks", [])
+    if not isinstance(data, dict):
+        raise ValueError("config root must be an object")
+    if "checkin_tasks" not in data:
+        raise ValueError("checkin_tasks is required")
+
+    raw_tasks = data["checkin_tasks"]
     if not isinstance(raw_tasks, list):
         raise ValueError("checkin_tasks must be a list")
 
