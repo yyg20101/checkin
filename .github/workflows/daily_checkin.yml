@@ -18,9 +18,12 @@ jobs:
       # 设置时区为中国时区
       TZ: Asia/Shanghai
       # 所有 Cookie Secrets 传递到环境变量
+      COOKIE_BINMT: ${{ secrets.COOKIE_BINMT }}
       COOKIE_DOINGFB: ${{ secrets.COOKIE_DOINGFB }}
+      COOKIE_HIFITI: ${{ secrets.COOKIE_HIFITI }}
       COOKIE_HOSTLOC: ${{ secrets.COOKIE_HOSTLOC }}
       COOKIE_SMZDM: ${{ secrets.COOKIE_SMZDM }}
+      COOKIE_V2EX: ${{ secrets.COOKIE_V2EX }}
     
     steps:
       - name: Checkout repository

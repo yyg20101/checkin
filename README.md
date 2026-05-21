@@ -8,11 +8,14 @@
 
 1. **DoingFB**
 2. **Hostloc**
-3. **什么值得买**
+3. **Hifiti**
+4. **MT管理器论坛**
+5. **V2EX**
+6. **什么值得买**
 
 已实现但暂不纳入统一每日任务：
 
-- **恩山无线论坛**：保留 `checkin/tasks/enshan.py` 和 `checkin_enshan.py` 兼容入口，后续需要时再加入 `checkin_config.json`。
+- **恩山无线论坛**：已按 qd-today HAR 流程更新 `checkin/tasks/enshan.py`，保留 `checkin_enshan.py` 兼容入口，后续需要时再加入 `checkin_config.json`。
 
 ## 项目结构
 
@@ -23,10 +26,13 @@ checkin/
     result.py      # 统一签到结果与摘要格式
     runner.py      # 任务筛选、执行、异常隔离和汇总输出
   tasks/
+    binmt.py
     doingfb.py
     enshan.py      # 已实现，暂未纳入每日统一任务
+    hifiti.py
     hostloc.py
     smzdm.py
+    v2ex.py
 run_checkin.py     # 统一命令行入口
 checkin_config.json
 ```
@@ -61,9 +67,12 @@ python3 run_checkin.py --task smzdm
 
 需要在 GitHub Secrets 中配置以下变量：
 
+- `COOKIE_BINMT`
 - `COOKIE_DOINGFB`
+- `COOKIE_HIFITI`
 - `COOKIE_HOSTLOC`
 - `COOKIE_SMZDM`
+- `COOKIE_V2EX`
 
 可选变量：
 

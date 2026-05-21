@@ -13,6 +13,24 @@
       "cookie_secret": "COOKIE_HOSTLOC"
     },
     {
+      "id": "hifiti",
+      "name": "Hifiti",
+      "module": "checkin.tasks.hifiti",
+      "cookie_secret": "COOKIE_HIFITI"
+    },
+    {
+      "id": "binmt",
+      "name": "MT管理器论坛",
+      "module": "checkin.tasks.binmt",
+      "cookie_secret": "COOKIE_BINMT"
+    },
+    {
+      "id": "v2ex",
+      "name": "V2EX",
+      "module": "checkin.tasks.v2ex",
+      "cookie_secret": "COOKIE_V2EX"
+    },
+    {
       "id": "smzdm",
       "name": "什么值得买",
       "module": "checkin.tasks.smzdm",
