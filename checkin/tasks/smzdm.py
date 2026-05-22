@@ -15,17 +15,17 @@ APP_VERSION = "10.4.1"
 APP_SK = "ierkM0OZZbsuBKLoAgQ6OJneLMXBQXmzX+LXkNTuKch8Ui2jGlahuFyWIzBiDq/L"
 
 
-def run(cookie: str) -> CheckinResult:
+def run(cookie: str, http_client: Any = requests) -> CheckinResult:
     headers = {
         "Host": "user-api.smzdm.com",
         "Content-Type": "application/x-www-form-urlencoded",
         "Cookie": cookie,
         "User-Agent": "smzdm_android_V10.4.1 rv:841 (22021211RC;Android12;zh)smzdmapp",
     }
-    active_messages = _safe_active(cookie)
-    token = robot_token(headers)
-    error_msg, data = sign(headers, token)
-    reward_messages = all_reward(headers, data)
+    active_messages = _safe_active(cookie, http_client)
+    token = robot_token(headers, http_client)
+    error_msg, data = sign(headers, token, http_client)
+    reward_messages = all_reward(headers, data, http_client)
 
     details = {
         "sign_result": error_msg,
@@ -39,7 +39,7 @@ def run(cookie: str) -> CheckinResult:
     return CheckinResult.success(message, details)
 
 
-def robot_token(headers: dict[str, str]) -> str:
+def robot_token(headers: dict[str, str], http_client: Any = requests) -> str:
     ts = round(time.time() * 1000)
     data = {
         "f": "android",
@@ -48,7 +48,7 @@ def robot_token(headers: dict[str, str]) -> str:
         "time": ts,
         "sign": _md5_upper(f"f=android&time={ts}&v={APP_VERSION}&weixin=1&key={APP_KEY}"),
     }
-    response = requests.post(
+    response = http_client.post(
         url="https://user-api.smzdm.com/robot/token",
         headers=headers,
         data=data,
@@ -59,7 +59,7 @@ def robot_token(headers: dict[str, str]) -> str:
     return payload["data"]["token"]
 
 
-def sign(headers: dict[str, str], token: str) -> tuple[str, dict[str, Any]]:
+def sign(headers: dict[str, str], token: str, http_client: Any = requests) -> tuple[str, dict[str, Any]]:
     time_stamp = round(time.time() * 1000)
     data = {
         "f": "android",
@@ -72,7 +72,7 @@ def sign(headers: dict[str, str], token: str) -> tuple[str, dict[str, Any]]:
             f"f=android&sk={APP_SK}&time={time_stamp}&token={token}&v={APP_VERSION}&weixin=1&key={APP_KEY}"
         ),
     }
-    response = requests.post(
+    response = http_client.post(
         url="https://user-api.smzdm.com/checkin",
         headers=headers,
         data=data,
@@ -83,8 +83,8 @@ def sign(headers: dict[str, str], token: str) -> tuple[str, dict[str, Any]]:
     return str(payload.get("error_msg", "签到接口无返回消息")), data
 
 
-def all_reward(headers: dict[str, str], data: dict[str, Any]) -> list[dict[str, str]]:
-    response = requests.post(
+def all_reward(headers: dict[str, str], data: dict[str, Any], http_client: Any = requests) -> list[dict[str, str]]:
+    response = http_client.post(
         url="https://user-api.smzdm.com/checkin/all_reward",
         headers=headers,
         data=data,
@@ -105,7 +105,7 @@ def all_reward(headers: dict[str, str], data: dict[str, Any]) -> list[dict[str, 
     return messages
 
 
-def active(cookie: str) -> list[dict[str, str]]:
+def active(cookie: str, http_client: Any = requests) -> list[dict[str, str]]:
     active_id = "ljX8qVlEA7"
     headers = {
         "Host": "zhiyou.smzdm.com",
@@ -119,8 +119,8 @@ def active(cookie: str) -> list[dict[str, str]]:
     }
     draw_url = f"https://zhiyou.smzdm.com/user/lottery/jsonp_draw?active_id={active_id}"
     info_url = "https://zhiyou.smzdm.com/user/"
-    draw_payload = requests.post(draw_url, headers=headers, timeout=30).json()
-    account_html = requests.get(info_url, headers=headers, timeout=30).text
+    draw_payload = http_client.post(draw_url, headers=headers, timeout=30).json()
+    account_html = http_client.get(info_url, headers=headers, timeout=30).text
     return [
         {"name": "活动结果", "value": str(draw_payload.get("error_msg", "活动接口无返回消息"))},
         {"name": "等级", "value": _extract_first(r"level/(.*?).png\?v=1", account_html)},
@@ -146,9 +146,9 @@ def active(cookie: str) -> list[dict[str, str]]:
     ]
 
 
-def _safe_active(cookie: str) -> list[dict[str, str]]:
+def _safe_active(cookie: str, http_client: Any = requests) -> list[dict[str, str]]:
     try:
-        return active(cookie)
+        return active(cookie, http_client)
     except Exception:
         return [{"name": "活动结果", "value": "活动接口失败，不影响主签到"}]
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from typing import Callable
 
 import requests
 from bs4 import BeautifulSoup
@@ -8,8 +9,11 @@ from bs4 import BeautifulSoup
 from checkin.core.result import CheckinResult
 
 
-def run(cookie: str) -> CheckinResult:
-    with requests.Session() as session:
+SessionFactory = Callable[[], requests.Session]
+
+
+def run(cookie: str, session_factory: SessionFactory = requests.Session) -> CheckinResult:
+    with session_factory() as session:
         session.cookies.update(_parse_cookie(cookie))
         session.headers.update(
             {

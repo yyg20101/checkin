@@ -3,6 +3,7 @@ from __future__ import annotations
 import random
 import re
 import time
+from typing import Callable
 
 from curl_cffi import requests
 
@@ -14,14 +15,23 @@ IMPERSONATE_BROWSER = "chrome110"
 RANDOM_VISITS_COUNT = 5
 DELAY_SECONDS = 3
 
+SessionFactory = Callable[[], requests.Session]
+UidFactory = Callable[[], int]
+SleepFunction = Callable[[float], None]
 
-def run(cookie: str) -> CheckinResult:
+
+def run(
+    cookie: str,
+    session_factory: SessionFactory = requests.Session,
+    uid_factory: UidFactory | None = None,
+    sleep: SleepFunction = time.sleep,
+) -> CheckinResult:
     headers = {
         "Cookie": cookie,
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
     }
-    with requests.Session() as session:
-        visit_random_profiles(session, headers)
+    with session_factory() as session:
+        visit_random_profiles(session, headers, uid_factory or random_uid, sleep)
         credits = get_user_credits(session, headers)
         if not credits:
             return CheckinResult.failed("❌ 未能获取积分信息")
@@ -31,24 +41,35 @@ def run(cookie: str) -> CheckinResult:
         )
 
 
-def visit_random_profiles(session, headers):
-    print(f"\n--- 开始执行随机访问任务，共 {RANDOM_VISITS_COUNT} 次 ---")
+def visit_random_profiles(
+    session,
+    headers,
+    uid_factory: UidFactory = lambda: random.randint(1, 45000),
+    sleep: SleepFunction = time.sleep,
+    visit_count: int = RANDOM_VISITS_COUNT,
+    delay_seconds: int = DELAY_SECONDS,
+):
+    print(f"\n--- 开始执行随机访问任务，共 {visit_count} 次 ---")
     headers["Referer"] = BASE_URL
 
-    for index in range(RANDOM_VISITS_COUNT):
-        random_uid = random.randint(1, 45000)
-        visit_url = f"{BASE_URL}space-uid-{random_uid}.html"
+    for index in range(visit_count):
+        uid = uid_factory()
+        visit_url = f"{BASE_URL}space-uid-{uid}.html"
 
         try:
-            print(f"({index + 1}/{RANDOM_VISITS_COUNT}) 正在访问随机用户空间: UID {random_uid} ...")
+            print(f"({index + 1}/{visit_count}) 正在访问随机用户空间: UID {uid} ...")
             response = session.get(visit_url, headers=headers, impersonate=IMPERSONATE_BROWSER)
             response.raise_for_status()
             print(f"✅ 访问成功, 状态码: {response.status_code}")
         except Exception as exc:
-            print(f"❌ 访问 UID {random_uid} 失败: {exc}")
+            print(f"❌ 访问 UID {uid} 失败: {exc}")
 
-        print(f"🕒 延迟 {DELAY_SECONDS} 秒...")
-        time.sleep(DELAY_SECONDS)
+        print(f"🕒 延迟 {delay_seconds} 秒...")
+        sleep(delay_seconds)
+
+
+def random_uid() -> int:
+    return random.randint(1, 45000)
 
 
 def get_user_credits(session, headers):
