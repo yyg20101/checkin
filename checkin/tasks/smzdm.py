@@ -5,27 +5,38 @@ import re
 import time
 from typing import Any
 
-import requests
-
+from checkin.core.http import DEFAULT_TIMEOUT_SECONDS, REQUEST_EXCEPTIONS, standard_client
 from checkin.core.result import CheckinResult
 
 
 APP_KEY = "apr1$AwP!wRRT$gJ/q.X24poeBInlUJC"
 APP_VERSION = "10.4.1"
 APP_SK = "ierkM0OZZbsuBKLoAgQ6OJneLMXBQXmzX+LXkNTuKch8Ui2jGlahuFyWIzBiDq/L"
+TIMEOUT_SECONDS = DEFAULT_TIMEOUT_SECONDS
 
 
-def run(cookie: str, http_client: Any = requests) -> CheckinResult:
+def run(cookie: str, http_client: Any = standard_client) -> CheckinResult:
     headers = {
         "Host": "user-api.smzdm.com",
         "Content-Type": "application/x-www-form-urlencoded",
         "Cookie": cookie,
         "User-Agent": "smzdm_android_V10.4.1 rv:841 (22021211RC;Android12;zh)smzdmapp",
     }
-    active_messages = _safe_active(cookie, http_client)
-    token = robot_token(headers, http_client)
-    error_msg, data = sign(headers, token, http_client)
-    reward_messages = all_reward(headers, data, http_client)
+    try:
+        active_messages = _safe_active(cookie, http_client)
+        token = robot_token(headers, http_client)
+        error_msg, data = sign(headers, token, http_client)
+        reward_messages = all_reward(headers, data, http_client)
+    except REQUEST_EXCEPTIONS as exc:
+        return CheckinResult.failed(
+            "什么值得买签到请求失败",
+            {"error": str(exc)},
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        return CheckinResult.failed(
+            f"什么值得买签到失败: {exc}",
+            {"error": str(exc)},
+        )
 
     details = {
         "sign_result": error_msg,
@@ -39,7 +50,7 @@ def run(cookie: str, http_client: Any = requests) -> CheckinResult:
     return CheckinResult.success(message, details)
 
 
-def robot_token(headers: dict[str, str], http_client: Any = requests) -> str:
+def robot_token(headers: dict[str, str], http_client: Any = standard_client) -> str:
     ts = round(time.time() * 1000)
     data = {
         "f": "android",
@@ -52,14 +63,14 @@ def robot_token(headers: dict[str, str], http_client: Any = requests) -> str:
         url="https://user-api.smzdm.com/robot/token",
         headers=headers,
         data=data,
-        timeout=30,
+        timeout=TIMEOUT_SECONDS,
     )
     response.raise_for_status()
     payload = response.json()
     return payload["data"]["token"]
 
 
-def sign(headers: dict[str, str], token: str, http_client: Any = requests) -> tuple[str, dict[str, Any]]:
+def sign(headers: dict[str, str], token: str, http_client: Any = standard_client) -> tuple[str, dict[str, Any]]:
     time_stamp = round(time.time() * 1000)
     data = {
         "f": "android",
@@ -76,19 +87,19 @@ def sign(headers: dict[str, str], token: str, http_client: Any = requests) -> tu
         url="https://user-api.smzdm.com/checkin",
         headers=headers,
         data=data,
-        timeout=30,
+        timeout=TIMEOUT_SECONDS,
     )
     response.raise_for_status()
     payload = response.json()
     return str(payload.get("error_msg", "签到接口无返回消息")), data
 
 
-def all_reward(headers: dict[str, str], data: dict[str, Any], http_client: Any = requests) -> list[dict[str, str]]:
+def all_reward(headers: dict[str, str], data: dict[str, Any], http_client: Any = standard_client) -> list[dict[str, str]]:
     response = http_client.post(
         url="https://user-api.smzdm.com/checkin/all_reward",
         headers=headers,
         data=data,
-        timeout=30,
+        timeout=TIMEOUT_SECONDS,
     )
     response.raise_for_status()
     payload = response.json()
@@ -105,7 +116,7 @@ def all_reward(headers: dict[str, str], data: dict[str, Any], http_client: Any =
     return messages
 
 
-def active(cookie: str, http_client: Any = requests) -> list[dict[str, str]]:
+def active(cookie: str, http_client: Any = standard_client) -> list[dict[str, str]]:
     active_id = "ljX8qVlEA7"
     headers = {
         "Host": "zhiyou.smzdm.com",
@@ -119,8 +130,8 @@ def active(cookie: str, http_client: Any = requests) -> list[dict[str, str]]:
     }
     draw_url = f"https://zhiyou.smzdm.com/user/lottery/jsonp_draw?active_id={active_id}"
     info_url = "https://zhiyou.smzdm.com/user/"
-    draw_payload = http_client.post(draw_url, headers=headers, timeout=30).json()
-    account_html = http_client.get(info_url, headers=headers, timeout=30).text
+    draw_payload = http_client.post(draw_url, headers=headers, timeout=TIMEOUT_SECONDS).json()
+    account_html = http_client.get(info_url, headers=headers, timeout=TIMEOUT_SECONDS).text
     return [
         {"name": "活动结果", "value": str(draw_payload.get("error_msg", "活动接口无返回消息"))},
         {"name": "等级", "value": _extract_first(r"level/(.*?).png\?v=1", account_html)},
@@ -146,7 +157,7 @@ def active(cookie: str, http_client: Any = requests) -> list[dict[str, str]]:
     ]
 
 
-def _safe_active(cookie: str, http_client: Any = requests) -> list[dict[str, str]]:
+def _safe_active(cookie: str, http_client: Any = standard_client) -> list[dict[str, str]]:
     try:
         return active(cookie, http_client)
     except Exception:

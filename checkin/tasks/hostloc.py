@@ -5,24 +5,27 @@ import re
 import time
 from typing import Callable
 
-from curl_cffi import requests
-
+from checkin.core.http import (
+    BROWSER_IMPERSONATE,
+    DEFAULT_TIMEOUT_SECONDS,
+    SessionFactory,
+    browser_session,
+)
 from checkin.core.result import CheckinResult
 
 
 BASE_URL = "https://hostloc.com/"
-IMPERSONATE_BROWSER = "chrome110"
 RANDOM_VISITS_COUNT = 5
 DELAY_SECONDS = 3
+TIMEOUT_SECONDS = DEFAULT_TIMEOUT_SECONDS
 
-SessionFactory = Callable[[], requests.Session]
 UidFactory = Callable[[], int]
 SleepFunction = Callable[[float], None]
 
 
 def run(
     cookie: str,
-    session_factory: SessionFactory = requests.Session,
+    session_factory: SessionFactory = browser_session,
     uid_factory: UidFactory | None = None,
     sleep: SleepFunction = time.sleep,
 ) -> CheckinResult:
@@ -58,7 +61,12 @@ def visit_random_profiles(
 
         try:
             print(f"({index + 1}/{visit_count}) 正在访问随机用户空间: UID {uid} ...")
-            response = session.get(visit_url, headers=headers, impersonate=IMPERSONATE_BROWSER)
+            response = session.get(
+                visit_url,
+                headers=headers,
+                impersonate=BROWSER_IMPERSONATE,
+                timeout=TIMEOUT_SECONDS,
+            )
             response.raise_for_status()
             print(f"✅ 访问成功, 状态码: {response.status_code}")
         except Exception as exc:
@@ -77,7 +85,12 @@ def get_user_credits(session, headers):
     credit_url = f"{BASE_URL}home.php?mod=spacecp&ac=credit&showcredit=1"
 
     try:
-        response = session.get(credit_url, headers=headers, impersonate=IMPERSONATE_BROWSER)
+        response = session.get(
+            credit_url,
+            headers=headers,
+            impersonate=BROWSER_IMPERSONATE,
+            timeout=TIMEOUT_SECONDS,
+        )
         response.raise_for_status()
         content = response.text
 

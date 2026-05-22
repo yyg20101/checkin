@@ -1,6 +1,7 @@
 import unittest
 
 from checkin.tasks import hostloc
+from checkin.core.http import BROWSER_IMPERSONATE
 
 
 class FakeResponse:
@@ -55,7 +56,10 @@ class HostlocTaskTests(unittest.TestCase):
         self.assertEqual(len(session.calls), 6)
         self.assertEqual(session.calls[0][1], f"{hostloc.BASE_URL}space-uid-100.html")
         self.assertEqual(session.calls[0][2]["headers"]["Cookie"], "foo=bar")
+        self.assertEqual(session.calls[0][2]["impersonate"], BROWSER_IMPERSONATE)
+        self.assertEqual(session.calls[0][2]["timeout"], hostloc.TIMEOUT_SECONDS)
         self.assertEqual(session.calls[-1][1], f"{hostloc.BASE_URL}home.php?mod=spacecp&ac=credit&showcredit=1")
+        self.assertEqual(session.calls[-1][2]["timeout"], hostloc.TIMEOUT_SECONDS)
         self.assertEqual(slept, [hostloc.DELAY_SECONDS] * hostloc.RANDOM_VISITS_COUNT)
 
     def test_run_fails_when_credits_request_fails(self):

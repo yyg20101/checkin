@@ -2,19 +2,22 @@ from __future__ import annotations
 
 import html
 import re
-from typing import Callable
 from urllib.parse import unquote
 
-from curl_cffi import requests
-
+from checkin.core.http import (
+    BROWSER_IMPERSONATE,
+    DEFAULT_TIMEOUT_SECONDS,
+    REQUEST_EXCEPTIONS,
+    SessionFactory,
+    browser_session,
+)
 from checkin.core.result import CheckinResult
 
 
 BASE_URL = "https://www.right.com.cn/forum"
 HOME_URL = f"{BASE_URL}/forum.php"
 SIGN_URL = f"{BASE_URL}/plugin.php?id=erling_qd%3Aaction&action=sign"
-IMPERSONATE_BROWSER = "chrome110"
-TIMEOUT_SECONDS = 30
+TIMEOUT_SECONDS = DEFAULT_TIMEOUT_SECONDS
 
 FORMHASH_PATTERN = re.compile(r'name="formhash"\s+value="([^"]+)"')
 UID_PATTERNS = (
@@ -25,15 +28,18 @@ COINS_PATTERN = re.compile(r"恩山币\s*</em>\s*(\d+)")
 USERNAME_PATTERN = re.compile(r"<h2[^>]*>\s*(?:<a[^>]*>)?([^<]+)")
 USER_GROUP_PATTERN = re.compile(r"用户组[^>]*>.*?<a[^>]*>([^<]+)</a>", re.S)
 
-SessionFactory = Callable[[], requests.Session]
 
-
-def run(cookie: str, session_factory: SessionFactory = requests.Session) -> CheckinResult:
+def run(cookie: str, session_factory: SessionFactory = browser_session) -> CheckinResult:
     try:
         with session_factory() as session:
             formhash, uid = fetch_home_vars(session, cookie)
             submit_checkin(session, cookie, formhash)
             coins, username, user_group = fetch_profile_info(session, cookie, uid)
+    except REQUEST_EXCEPTIONS as exc:
+        return CheckinResult.failed(
+            f"恩山无线论坛签到请求失败: {exc}",
+            {"error": str(exc)},
+        )
     except ValueError as exc:
         return CheckinResult.failed(
             f"恩山无线论坛签到失败: {exc}",
@@ -51,11 +57,11 @@ def run(cookie: str, session_factory: SessionFactory = requests.Session) -> Chec
     )
 
 
-def fetch_home_vars(session: requests.Session, cookie: str) -> tuple[str, str]:
+def fetch_home_vars(session, cookie: str) -> tuple[str, str]:
     response = session.get(
         HOME_URL,
         headers=_page_headers(cookie),
-        impersonate=IMPERSONATE_BROWSER,
+        impersonate=BROWSER_IMPERSONATE,
         timeout=TIMEOUT_SECONDS,
     )
     response.raise_for_status()
@@ -69,22 +75,22 @@ def fetch_home_vars(session: requests.Session, cookie: str) -> tuple[str, str]:
     return formhash_match.group(1), uid
 
 
-def submit_checkin(session: requests.Session, cookie: str, formhash: str) -> None:
+def submit_checkin(session, cookie: str, formhash: str) -> None:
     response = session.post(
         SIGN_URL,
         headers=_sign_headers(cookie),
         data={"formhash": formhash},
-        impersonate=IMPERSONATE_BROWSER,
+        impersonate=BROWSER_IMPERSONATE,
         timeout=TIMEOUT_SECONDS,
     )
     response.raise_for_status()
 
 
-def fetch_profile_info(session: requests.Session, cookie: str, uid: str) -> tuple[str, str, str]:
+def fetch_profile_info(session, cookie: str, uid: str) -> tuple[str, str, str]:
     response = session.get(
         f"{BASE_URL}/home.php?mod=space&uid={uid}&do=profile&mycenter=1",
         headers=_profile_headers(cookie),
-        impersonate=IMPERSONATE_BROWSER,
+        impersonate=BROWSER_IMPERSONATE,
         timeout=TIMEOUT_SECONDS,
     )
     response.raise_for_status()

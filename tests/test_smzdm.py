@@ -1,5 +1,7 @@
 import unittest
 
+import requests
+
 from checkin.tasks import smzdm
 
 
@@ -78,7 +80,9 @@ class SmzdmTaskTests(unittest.TestCase):
         self.assertEqual(client.calls[0][0], "POST")
         self.assertIn("jsonp_draw", client.calls[0][1])
         self.assertEqual(client.calls[0][2]["headers"]["Cookie"], "foo=bar")
+        self.assertEqual(client.calls[0][2]["timeout"], smzdm.TIMEOUT_SECONDS)
         self.assertIn("robot/token", client.calls[2][1])
+        self.assertEqual(client.calls[2][2]["timeout"], smzdm.TIMEOUT_SECONDS)
         self.assertIn("checkin/all_reward", client.calls[4][1])
 
     def test_safe_active_does_not_block_main_checkin(self):
@@ -93,6 +97,20 @@ class SmzdmTaskTests(unittest.TestCase):
 
         self.assertEqual(result.status, "success")
         self.assertEqual(result.details["activity"], [{"name": "活动结果", "value": "活动接口失败，不影响主签到"}])
+
+    def test_run_wraps_main_checkin_request_errors(self):
+        class FailingMainClient(FakeHttpClient):
+            def post(self, *args, **kwargs):
+                url = kwargs.get("url") or args[0]
+                if "robot/token" in url:
+                    raise requests.ConnectionError("network down")
+                return super().post(*args, **kwargs)
+
+        result = smzdm.run("foo=bar", http_client=FailingMainClient())
+
+        self.assertEqual(result.status, "failed")
+        self.assertIn("请求失败", result.message)
+        self.assertEqual(result.details["error"], "network down")
 
 
 if __name__ == "__main__":
