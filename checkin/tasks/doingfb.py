@@ -1,41 +1,51 @@
 from __future__ import annotations
 
 import json
-from typing import Callable
 
-import requests
 from bs4 import BeautifulSoup
 
+from checkin.core.http import DEFAULT_TIMEOUT_SECONDS, REQUEST_EXCEPTIONS, SessionFactory, standard_session
 from checkin.core.result import CheckinResult
 
 
-SessionFactory = Callable[[], requests.Session]
+TIMEOUT_SECONDS = DEFAULT_TIMEOUT_SECONDS
 
 
-def run(cookie: str, session_factory: SessionFactory = requests.Session) -> CheckinResult:
-    with session_factory() as session:
-        session.cookies.update(_parse_cookie(cookie))
-        session.headers.update(
-            {
-                "user-agent": "Mozilla/5.0 (Linux; Android 8.0.0; SM-G955U Build/R16NW) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Mobile Safari/537.36 Edg/143.0.0.0",
-            }
-        )
-
-        user_id, token, allow_checkin, days_count = get_initial_data(session)
-        if not allow_checkin:
-            return CheckinResult.success(
-                f"📅 已签到过，连续 {days_count} 天",
-                {"consecutive_days": days_count},
+def run(cookie: str, session_factory: SessionFactory = standard_session) -> CheckinResult:
+    try:
+        with session_factory() as session:
+            session.cookies.update(_parse_cookie(cookie))
+            session.headers.update(
+                {
+                    "user-agent": "Mozilla/5.0 (Linux; Android 8.0.0; SM-G955U Build/R16NW) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Mobile Safari/537.36 Edg/143.0.0.0",
+                }
             )
 
-        user_info = perform_checkin(session, user_id, token, allow_checkin, days_count)
-        display_name = user_info.get("displayName")
-        money = user_info.get("money")
-        if not display_name:
-            return CheckinResult.failed("⚠️ 未能解析用户信息")
-        return CheckinResult.success(
-            f"💰 签到成功，硬币: {money}",
-            {"coins": money, "display_name": display_name},
+            user_id, token, allow_checkin, days_count = get_initial_data(session)
+            if not allow_checkin:
+                return CheckinResult.success(
+                    f"📅 已签到过，连续 {days_count} 天",
+                    {"consecutive_days": days_count},
+                )
+
+            user_info = perform_checkin(session, user_id, token, allow_checkin, days_count)
+            display_name = user_info.get("displayName")
+            money = user_info.get("money")
+            if not display_name:
+                return CheckinResult.failed("⚠️ 未能解析用户信息")
+            return CheckinResult.success(
+                f"💰 签到成功，硬币: {money}",
+                {"coins": money, "display_name": display_name},
+            )
+    except REQUEST_EXCEPTIONS as exc:
+        return CheckinResult.failed(
+            "DoingFB 签到请求失败",
+            {"error": str(exc)},
+        )
+    except ValueError as exc:
+        return CheckinResult.failed(
+            f"DoingFB 签到失败: {exc}",
+            {"error": str(exc)},
         )
 
 
@@ -48,10 +58,10 @@ def _parse_cookie(cookie: str) -> dict[str, str]:
     return cookie_dict
 
 
-def get_initial_data(session: requests.Session):
+def get_initial_data(session):
     print("正在访问首页以获取初始数据...")
     url = "https://doingfb.com/"
-    response = session.get(url)
+    response = session.get(url, timeout=TIMEOUT_SECONDS)
     response.raise_for_status()
     print(f"[LOG] 响应状态码: {response.status_code}")
     print(f"[LOG] 响应 Content-Type: {response.headers.get('Content-Type', 'N/A')}")
@@ -89,7 +99,7 @@ def get_initial_data(session: requests.Session):
     return user_id, csrf_token, allow_checkin, checkin_days_count
 
 
-def perform_checkin(session: requests.Session, user_id, csrf_token, allow_checkin, checkin_days_count):
+def perform_checkin(session, user_id, csrf_token, allow_checkin, checkin_days_count):
     print("\n正在执行签到...")
     url = f"https://doingfb.com/api/users/{user_id}"
     data = {
@@ -116,7 +126,7 @@ def perform_checkin(session: requests.Session, user_id, csrf_token, allow_checki
 
     json_body = json.dumps(data, separators=(",", ":"))
     print(f"[DEBUG] 请求 URL: {url}")
-    response = session.post(url, data=json_body)
+    response = session.post(url, data=json_body, timeout=TIMEOUT_SECONDS)
     session.headers.pop("x-http-method-override", None)
 
     print(f"[DEBUG] 响应状态码: {response.status_code}")

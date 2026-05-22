@@ -2,17 +2,21 @@ from __future__ import annotations
 
 import html
 import re
-from typing import Callable
 from urllib.parse import quote, unquote
 
-import requests
-
+from checkin.core.http import (
+    BROWSER_IMPERSONATE,
+    DEFAULT_TIMEOUT_SECONDS,
+    REQUEST_EXCEPTIONS,
+    SessionFactory,
+    browser_session,
+)
 from checkin.core.result import CheckinResult
 
 
 BASE_URL = "https://bbs.binmt.cc"
 SIGN_PAGE_URL = f"{BASE_URL}/plugin.php?id=k_misign%3Asign"
-TIMEOUT_SECONDS = 30
+TIMEOUT_SECONDS = DEFAULT_TIMEOUT_SECONDS
 
 FORMHASH_PATTERN = re.compile(r'name="formhash"\s+value="(.+?)"')
 REWARD_PATTERN = re.compile(r'id="lxreward"\s+value="(.+?)"')
@@ -20,16 +24,13 @@ TOTAL_DAYS_PATTERN = re.compile(r'id="lxtdays"\s+value="(.+?)"')
 NOT_SIGNED_TEXT = "您今天还没有签到"
 ILLEGAL_REQUEST_TEXT = "访问请求当中含有非法字符"
 
-SessionFactory = Callable[[], requests.Session]
-
-
-def run(cookie: str, session_factory: SessionFactory = requests.Session) -> CheckinResult:
+def run(cookie: str, session_factory: SessionFactory = browser_session) -> CheckinResult:
     try:
         with session_factory() as session:
             formhash = fetch_formhash(session, cookie)
             submit_checkin(session, cookie, formhash)
             reward, total_days = fetch_checkin_details(session, cookie)
-    except requests.RequestException as exc:
+    except REQUEST_EXCEPTIONS as exc:
         return CheckinResult.failed(
             "MT管理器论坛签到请求失败",
             {"error": str(exc)},
@@ -50,10 +51,11 @@ def run(cookie: str, session_factory: SessionFactory = requests.Session) -> Chec
     )
 
 
-def fetch_formhash(session: requests.Session, cookie: str) -> str:
+def fetch_formhash(session, cookie: str) -> str:
     response = session.get(
         SIGN_PAGE_URL,
         headers=_page_headers(cookie),
+        impersonate=BROWSER_IMPERSONATE,
         timeout=TIMEOUT_SECONDS,
     )
     response.raise_for_status()
@@ -64,7 +66,7 @@ def fetch_formhash(session: requests.Session, cookie: str) -> str:
     return match.group(1)
 
 
-def submit_checkin(session: requests.Session, cookie: str, formhash: str) -> None:
+def submit_checkin(session, cookie: str, formhash: str) -> None:
     url = (
         f"{BASE_URL}/k_misign-sign.html?operation=qiandao&format=button"
         f"&formhash={quote(formhash)}&inajax=1&ajaxtarget=midaben_sign"
@@ -72,6 +74,7 @@ def submit_checkin(session: requests.Session, cookie: str, formhash: str) -> Non
     response = session.get(
         url,
         headers=_ajax_headers(cookie),
+        impersonate=BROWSER_IMPERSONATE,
         timeout=TIMEOUT_SECONDS,
     )
     response.raise_for_status()
@@ -80,10 +83,11 @@ def submit_checkin(session: requests.Session, cookie: str, formhash: str) -> Non
         raise ValueError(ILLEGAL_REQUEST_TEXT)
 
 
-def fetch_checkin_details(session: requests.Session, cookie: str) -> tuple[str, str]:
+def fetch_checkin_details(session, cookie: str) -> tuple[str, str]:
     response = session.get(
         SIGN_PAGE_URL,
         headers=_page_headers(cookie),
+        impersonate=BROWSER_IMPERSONATE,
         timeout=TIMEOUT_SECONDS,
     )
     response.raise_for_status()

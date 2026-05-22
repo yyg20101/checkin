@@ -2,11 +2,9 @@ from __future__ import annotations
 
 import html
 import re
-from typing import Callable
 from urllib.parse import quote, unquote
 
-import requests
-
+from checkin.core.http import DEFAULT_TIMEOUT_SECONDS, REQUEST_EXCEPTIONS, SessionFactory, standard_session
 from checkin.core.result import CheckinResult
 
 
@@ -14,7 +12,7 @@ BASE_URL = "https://www.v2ex.com"
 HOME_URL = f"{BASE_URL}/"
 DAILY_URL = f"{BASE_URL}/mission/daily"
 BALANCE_URL = f"{BASE_URL}/balance"
-TIMEOUT_SECONDS = 30
+TIMEOUT_SECONDS = DEFAULT_TIMEOUT_SECONDS
 
 ONCE_PATTERN = re.compile(r"once=(.+?)'")
 DAYS_PATTERN = re.compile(r"已连续登录(.+?)天")
@@ -22,10 +20,7 @@ REWARD_PATTERN = re.compile(r"每日登录奖励(.+?)铜币")
 SIGNED_TEXT = "每日登录奖励已领取"
 UNSIGNED_TEXT = "领取 X 铜币"
 
-SessionFactory = Callable[[], requests.Session]
-
-
-def run(cookie: str, session_factory: SessionFactory = requests.Session) -> CheckinResult:
+def run(cookie: str, session_factory: SessionFactory = standard_session) -> CheckinResult:
     try:
         with session_factory() as session:
             visit_home(session, cookie)
@@ -37,7 +32,7 @@ def run(cookie: str, session_factory: SessionFactory = requests.Session) -> Chec
 
             days = extract_signed_days(daily_page)
             reward = fetch_reward(session, cookie)
-    except requests.RequestException as exc:
+    except REQUEST_EXCEPTIONS as exc:
         return CheckinResult.failed(
             "V2EX 签到请求失败",
             {"error": str(exc)},
@@ -58,7 +53,7 @@ def run(cookie: str, session_factory: SessionFactory = requests.Session) -> Chec
     )
 
 
-def visit_home(session: requests.Session, cookie: str) -> None:
+def visit_home(session, cookie: str) -> None:
     response = session.get(
         HOME_URL,
         headers=_headers(cookie),
@@ -67,7 +62,7 @@ def visit_home(session: requests.Session, cookie: str) -> None:
     response.raise_for_status()
 
 
-def fetch_daily_page(session: requests.Session, cookie: str) -> str:
+def fetch_daily_page(session, cookie: str) -> str:
     response = session.get(
         DAILY_URL,
         headers=_headers(cookie, referer=HOME_URL),
@@ -86,7 +81,7 @@ def extract_once(content: str) -> str | None:
     raise ValueError("未能从每日任务页提取 once，Cookie 可能已过期或页面结构已变化")
 
 
-def redeem_daily_reward(session: requests.Session, cookie: str, once: str) -> None:
+def redeem_daily_reward(session, cookie: str, once: str) -> None:
     response = session.get(
         f"{DAILY_URL}/redeem?once={quote(once)}",
         headers=_headers(cookie, referer=DAILY_URL),
@@ -110,7 +105,7 @@ def extract_signed_days(content: str) -> str:
     return html.unescape(unquote(match.group(1))).strip()
 
 
-def fetch_reward(session: requests.Session, cookie: str) -> str:
+def fetch_reward(session, cookie: str) -> str:
     response = session.get(
         BALANCE_URL,
         headers=_headers(cookie, referer=DAILY_URL),

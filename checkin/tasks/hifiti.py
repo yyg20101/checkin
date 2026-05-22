@@ -2,29 +2,24 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Callable
 
-import requests
-
+from checkin.core.http import DEFAULT_TIMEOUT_SECONDS, REQUEST_EXCEPTIONS, SessionFactory, standard_session
 from checkin.core.result import CheckinResult
 
 
 SIGN_URL = "https://www.hifiti.com/sg_sign.htm"
-TIMEOUT_SECONDS = 30
+TIMEOUT_SECONDS = DEFAULT_TIMEOUT_SECONDS
 
 SIGN_PATTERN = re.compile(r'var\s+sign\s*=\s*"([^"]+)"')
 MESSAGE_PATTERN = re.compile(r'"message"\s*:\s*"(.+?)"')
 FAILURE_KEYWORDS = ("登录", "未登录", "过期", "失败", "错误")
 
-SessionFactory = Callable[[], requests.Session]
-
-
-def run(cookie: str, session_factory: SessionFactory = requests.Session) -> CheckinResult:
+def run(cookie: str, session_factory: SessionFactory = standard_session) -> CheckinResult:
     try:
         with session_factory() as session:
             sign = fetch_sign_token(session, cookie)
             message = submit_checkin(session, cookie, sign)
-    except requests.RequestException as exc:
+    except REQUEST_EXCEPTIONS as exc:
         return CheckinResult.failed(
             "Hifiti 签到请求失败",
             {"error": str(exc)},
@@ -41,7 +36,7 @@ def run(cookie: str, session_factory: SessionFactory = requests.Session) -> Chec
     return CheckinResult.success(f"Hifiti: {message}", details)
 
 
-def fetch_sign_token(session: requests.Session, cookie: str) -> str:
+def fetch_sign_token(session, cookie: str) -> str:
     response = session.get(
         SIGN_URL,
         headers=_get_headers(cookie),
@@ -55,7 +50,7 @@ def fetch_sign_token(session: requests.Session, cookie: str) -> str:
     return match.group(1)
 
 
-def submit_checkin(session: requests.Session, cookie: str, sign: str) -> str:
+def submit_checkin(session, cookie: str, sign: str) -> str:
     response = session.post(
         SIGN_URL,
         headers=_post_headers(cookie),
@@ -70,7 +65,7 @@ def submit_checkin(session: requests.Session, cookie: str, sign: str) -> str:
     return message
 
 
-def _extract_message(response: requests.Response) -> str:
+def _extract_message(response) -> str:
     try:
         payload = response.json()
     except (ValueError, json.JSONDecodeError):

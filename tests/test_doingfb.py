@@ -100,11 +100,13 @@ class DoingfbTaskTests(unittest.TestCase):
         self.assertEqual(result.details, {"consecutive_days": 7})
         self.assertEqual(len(session.calls), 1)
 
-    def test_run_raises_when_initial_payload_is_missing(self):
+    def test_run_fails_when_initial_payload_is_missing(self):
         session = FakeSession([FakeResponse("<html>login</html>")])
 
-        with self.assertRaises(ValueError):
-            doingfb.run("foo=bar", session_factory=lambda: session)
+        result = doingfb.run("foo=bar", session_factory=lambda: session)
+
+        self.assertEqual(result.status, "failed")
+        self.assertIn("flarum-json-payload", result.message)
 
 
 if __name__ == "__main__":
