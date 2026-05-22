@@ -41,9 +41,11 @@ def load_summaries(log_path: str | Path) -> list[dict[str, Any]]:
     return summaries
 
 
-def build_task_results(summaries: list[dict[str, Any]]) -> tuple[int, int, str]:
+def build_task_results(summaries: list[dict[str, Any]]) -> tuple[int, int, int, int, str]:
     total_tasks = len(summaries)
     success_tasks = sum(1 for item in summaries if item.get("status") == "success")
+    failed_tasks = sum(1 for item in summaries if item.get("status") == "failed")
+    skipped_tasks = sum(1 for item in summaries if item.get("status") == "skipped")
     result_lines: list[str] = []
     for item in summaries:
         details = item.get("details") or {}
@@ -57,14 +59,16 @@ def build_task_results(summaries: list[dict[str, Any]]) -> tuple[int, int, str]:
             result_lines.append(f"  - {clean_scalar(message)}")
         append_detail_lines(result_lines, details)
         result_lines.append("")
-    return total_tasks, success_tasks, "\n".join(result_lines)
+    return total_tasks, success_tasks, failed_tasks, skipped_tasks, "\n".join(result_lines)
 
 
 def write_github_env(log_path: str | Path, env_path: str | Path) -> None:
-    total_tasks, success_tasks, task_results = build_task_results(load_summaries(log_path))
+    total_tasks, success_tasks, failed_tasks, skipped_tasks, task_results = build_task_results(load_summaries(log_path))
     with Path(env_path).open("a", encoding="utf-8") as env_file:
         env_file.write(f"TOTAL_TASKS={total_tasks}\n")
         env_file.write(f"SUCCESS_TASKS={success_tasks}\n")
+        env_file.write(f"FAILED_TASKS={failed_tasks}\n")
+        env_file.write(f"SKIPPED_TASKS={skipped_tasks}\n")
         env_file.write(f"TASK_RESULTS<<{ENV_MULTILINE_DELIMITER}\n")
         env_file.write(task_results)
         env_file.write(f"\n{ENV_MULTILINE_DELIMITER}\n")

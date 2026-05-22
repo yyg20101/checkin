@@ -29,13 +29,13 @@ def test_run_tasks_filters_by_task_id(monkeypatch):
     assert results[0].account.id == "default"
 
 
-def test_run_tasks_reports_missing_cookie(monkeypatch):
+def test_run_tasks_skips_missing_cookie(monkeypatch):
     configs = [TaskConfig("one", "One", "checkin.tasks.one", "COOKIE_ONE")]
     monkeypatch.delenv("COOKIE_ONE", raising=False)
 
     results = run_tasks(configs, import_module=lambda name: None)
 
-    assert results[0].result.status == "failed"
+    assert results[0].result.status == "skipped"
     assert "COOKIE_ONE" in results[0].result.message
     assert results[0].account.cookie_secret == "COOKIE_ONE"
 
@@ -141,7 +141,7 @@ def test_run_tasks_isolates_missing_cookie_by_account(monkeypatch):
 
     assert [(item.account.id, item.result.status, item.result.message) for item in results] == [
         ("main", "success", "ran cookie-main"),
-        ("alt", "failed", "缺少环境变量 COOKIE_ONE_ALT"),
+        ("alt", "skipped", "未配置环境变量 COOKIE_ONE_ALT，跳过该账号"),
     ]
 
 

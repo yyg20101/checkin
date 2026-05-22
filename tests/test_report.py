@@ -27,10 +27,12 @@ def test_build_task_results_renders_status_and_details():
         },
     ]
 
-    total_tasks, success_tasks, task_results = report.build_task_results(summaries)
+    total_tasks, success_tasks, failed_tasks, skipped_tasks, task_results = report.build_task_results(summaries)
 
     assert total_tasks == 2
     assert success_tasks == 1
+    assert failed_tasks == 1
+    assert skipped_tasks == 0
     assert "**Demo / 主账号:** ✅ 成功" in task_results
     assert "  - 签到成功 第二行" in task_results
     assert "  - **硬币/金币:** 10" in task_results
@@ -59,6 +61,8 @@ def test_write_github_env_reads_summary_lines(tmp_path):
     output = env_path.read_text(encoding="utf-8")
     assert "TOTAL_TASKS=1\n" in output
     assert "SUCCESS_TASKS=0\n" in output
+    assert "FAILED_TASKS=0\n" in output
+    assert "SKIPPED_TASKS=1\n" in output
     assert f"TASK_RESULTS<<{report.ENV_MULTILINE_DELIMITER}\n" in output
     assert "**Demo:** ⏭️ 跳过" in output
     assert output.endswith(f"\n{report.ENV_MULTILINE_DELIMITER}\n")

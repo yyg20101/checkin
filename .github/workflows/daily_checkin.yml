@@ -76,9 +76,11 @@ jobs:
 
           TOTAL_TASKS=$(grep '^TOTAL_TASKS=' "$GITHUB_ENV" | tail -1 | cut -d= -f2)
           SUCCESS_TASKS=$(grep '^SUCCESS_TASKS=' "$GITHUB_ENV" | tail -1 | cut -d= -f2)
+          FAILED_TASKS=$(grep '^FAILED_TASKS=' "$GITHUB_ENV" | tail -1 | cut -d= -f2)
+          SKIPPED_TASKS=$(grep '^SKIPPED_TASKS=' "$GITHUB_ENV" | tail -1 | cut -d= -f2)
           echo "=========================================="
           echo "📊 所有任务执行完成"
-          echo "   总任务: $TOTAL_TASKS, 成功: $SUCCESS_TASKS, 失败: $((TOTAL_TASKS - SUCCESS_TASKS))"
+          echo "   总任务: $TOTAL_TASKS, 成功: $SUCCESS_TASKS, 失败: $FAILED_TASKS, 跳过: $SKIPPED_TASKS"
           echo "=========================================="
 
           # 保存变量供后续步骤使用
@@ -106,7 +108,8 @@ jobs:
             success_rate=$(( SUCCESS_TASKS * 100 / TOTAL_TASKS ))
             echo "- 📋 **总任务数:** $TOTAL_TASKS" >> "$RELEASE_SUMMARY"
             echo "- ✅ **成功任务:** $SUCCESS_TASKS" >> "$RELEASE_SUMMARY"
-            echo "- ❌ **失败任务:** $((TOTAL_TASKS - SUCCESS_TASKS))" >> "$RELEASE_SUMMARY"
+            echo "- ❌ **失败任务:** $FAILED_TASKS" >> "$RELEASE_SUMMARY"
+            echo "- ⏭️ **跳过任务:** $SKIPPED_TASKS" >> "$RELEASE_SUMMARY"
             echo "- 📊 **成功率:** ${success_rate}%" >> "$RELEASE_SUMMARY"
           else
             echo "- ⚠️ **状态:** 未找到任务执行记录" >> "$RELEASE_SUMMARY"

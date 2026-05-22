@@ -59,7 +59,7 @@ def run_tasks(
                     TaskRun(
                         config=config,
                         account=account,
-                        result=CheckinResult.failed(f"缺少环境变量 {account.cookie_secret}"),
+                        result=CheckinResult.skipped(f"未配置环境变量 {account.cookie_secret}，跳过该账号"),
                     )
                 )
                 continue
