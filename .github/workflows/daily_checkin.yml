@@ -3,8 +3,9 @@ name: Daily Checkin
 on:
   workflow_dispatch: # 允许手动触发
   schedule:
-    # 设置在每天的 UTC 时间 1:00 运行 (对应中国时区 Asia/Shanghai 上午9点)
-    - cron: '0 1 * * *'
+    # 设置在每天中国时区 Asia/Shanghai 上午8:17运行，避开 GitHub Actions 整点调度高峰
+    - cron: '17 8 * * *'
+      timezone: Asia/Shanghai
 
 # 设置工作流权限，允许创建Release
 permissions:

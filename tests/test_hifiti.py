@@ -63,14 +63,35 @@ class HifitiTaskTests(unittest.TestCase):
         self.assertEqual(session.calls[1][0], "POST")
         self.assertEqual(session.calls[1][2]["data"], {"sign": "abc+123"})
 
-    def test_run_fails_when_sign_token_is_missing(self):
-        session = FakeSession([FakeResponse("<html>login</html>")])
+    def test_run_falls_back_to_direct_post_when_sign_token_is_missing(self):
+        session = FakeSession(
+            [
+                FakeResponse("<html>new sign page without token</html>"),
+                FakeResponse('{"message": "签到成功，奖励 2 金币"}', {"message": "签到成功，奖励 2 金币"}),
+            ]
+        )
+
+        result = hifiti.run("foo=bar", session_factory=lambda: session)
+
+        self.assertEqual(result.status, "success")
+        self.assertEqual(result.details, {"sign_result": "签到成功，奖励 2 金币"})
+        self.assertEqual(len(session.calls), 2)
+        self.assertEqual(session.calls[1][0], "POST")
+        self.assertEqual(session.calls[1][2]["data"], {})
+
+    def test_run_treats_direct_post_login_message_as_failed(self):
+        session = FakeSession(
+            [
+                FakeResponse("<html>login</html>"),
+                FakeResponse('{"code":"0","message":"请登录后再签到!"}', {"code": "0", "message": "请登录后再签到!"}),
+            ]
+        )
 
         result = hifiti.run("foo=bar", session_factory=lambda: session)
 
         self.assertEqual(result.status, "failed")
-        self.assertIn("sign", result.message)
-        self.assertEqual(len(session.calls), 1)
+        self.assertIn("请登录", result.message)
+        self.assertEqual(result.details, {"sign_result": "请登录后再签到!"})
 
     def test_run_treats_login_message_as_failed(self):
         session = FakeSession(

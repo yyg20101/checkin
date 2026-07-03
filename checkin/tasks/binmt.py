@@ -18,11 +18,17 @@ BASE_URL = "https://bbs.binmt.cc"
 SIGN_PAGE_URL = f"{BASE_URL}/plugin.php?id=k_misign%3Asign"
 TIMEOUT_SECONDS = DEFAULT_TIMEOUT_SECONDS
 
-FORMHASH_PATTERN = re.compile(r'name="formhash"\s+value="(.+?)"')
+FORMHASH_PATTERNS = (
+    re.compile(r'name=["\']formhash["\'][^>]*value=["\']([^"\']+)["\']', re.IGNORECASE),
+    re.compile(r'value=["\']([^"\']+)["\'][^>]*name=["\']formhash["\']', re.IGNORECASE),
+)
 REWARD_PATTERN = re.compile(r'id="lxreward"\s+value="(.+?)"')
 TOTAL_DAYS_PATTERN = re.compile(r'id="lxtdays"\s+value="(.+?)"')
 NOT_SIGNED_TEXT = "您今天还没有签到"
 ILLEGAL_REQUEST_TEXT = "访问请求当中含有非法字符"
+LOGIN_REQUIRED_TEXT = "您需要先登录"
+LOGIN_URL_TEXT = "member.php?mod=logging"
+LOGGED_OUT_UID_PATTERN = re.compile(r"discuz_uid\s*=\s*['\"]0['\"]")
 
 def run(cookie: str, session_factory: SessionFactory = browser_session) -> CheckinResult:
     try:
@@ -60,10 +66,11 @@ def fetch_formhash(session, cookie: str) -> str:
     )
     response.raise_for_status()
 
-    match = FORMHASH_PATTERN.search(response.text)
-    if not match:
+    _raise_for_page_error(response.text, "签到页")
+    formhash = _extract_formhash(response.text)
+    if not formhash:
         raise ValueError("未能从签到页提取 formhash，Cookie 可能已过期或页面结构已变化")
-    return match.group(1)
+    return formhash
 
 
 def submit_checkin(session, cookie: str, formhash: str) -> None:
@@ -81,6 +88,8 @@ def submit_checkin(session, cookie: str, formhash: str) -> None:
 
     if ILLEGAL_REQUEST_TEXT in response.text:
         raise ValueError(ILLEGAL_REQUEST_TEXT)
+    if _is_login_required_response(response.text):
+        raise ValueError("签到接口提示需要登录，Cookie 可能已过期或未包含登录态")
 
 
 def fetch_checkin_details(session, cookie: str) -> tuple[str, str]:
@@ -92,6 +101,7 @@ def fetch_checkin_details(session, cookie: str) -> tuple[str, str]:
     )
     response.raise_for_status()
 
+    _raise_for_page_error(response.text, "签到详情页")
     if NOT_SIGNED_TEXT in response.text:
         raise ValueError("签到后仍显示未签到")
 
@@ -105,6 +115,27 @@ def _extract_value(pattern: re.Pattern[str], text: str, label: str) -> str:
     if not match:
         raise ValueError(f"未能解析{label}")
     return html.unescape(unquote(match.group(1))).strip()
+
+
+def _extract_formhash(text: str) -> str:
+    for pattern in FORMHASH_PATTERNS:
+        match = pattern.search(text)
+        if match:
+            return html.unescape(match.group(1)).strip()
+    return ""
+
+
+def _raise_for_page_error(text: str, page_name: str) -> None:
+    if ILLEGAL_REQUEST_TEXT in text:
+        raise ValueError(ILLEGAL_REQUEST_TEXT)
+    if _is_login_required_response(text):
+        raise ValueError(f"{page_name}提示需要登录，Cookie 可能已过期或未包含登录态")
+
+
+def _is_login_required_response(text: str) -> bool:
+    if LOGIN_REQUIRED_TEXT in text:
+        return True
+    return bool(LOGGED_OUT_UID_PATTERN.search(text) and LOGIN_URL_TEXT in text)
 
 
 def _page_headers(cookie: str) -> dict[str, str]:

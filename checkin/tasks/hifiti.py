@@ -36,7 +36,7 @@ def run(cookie: str, session_factory: SessionFactory = standard_session) -> Chec
     return CheckinResult.success(f"Hifiti: {message}", details)
 
 
-def fetch_sign_token(session, cookie: str) -> str:
+def fetch_sign_token(session, cookie: str) -> str | None:
     response = session.get(
         SIGN_URL,
         headers=_get_headers(cookie),
@@ -45,23 +45,22 @@ def fetch_sign_token(session, cookie: str) -> str:
     response.raise_for_status()
 
     match = SIGN_PATTERN.search(response.text)
-    if not match:
-        raise ValueError("未能从签到页提取 sign，Cookie 可能已过期或页面结构已变化")
-    return match.group(1)
+    return match.group(1) if match else None
 
 
-def submit_checkin(session, cookie: str, sign: str) -> str:
+def submit_checkin(session, cookie: str, sign: str | None) -> str:
+    data = {"sign": sign} if sign else {}
     response = session.post(
         SIGN_URL,
         headers=_post_headers(cookie),
-        data={"sign": sign},
+        data=data,
         timeout=TIMEOUT_SECONDS,
     )
     response.raise_for_status()
 
     message = _extract_message(response)
     if not message:
-        raise ValueError("未能解析签到接口返回消息")
+        raise ValueError("未能解析签到接口返回消息，Cookie 可能已过期或页面结构已变化")
     return message
 
 

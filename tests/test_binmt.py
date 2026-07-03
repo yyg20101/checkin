@@ -69,6 +69,42 @@ class BinmtTaskTests(unittest.TestCase):
         self.assertIn("formhash", result.message)
         self.assertEqual(len(session.calls), 1)
 
+    def test_run_reports_login_required_page(self):
+        session = FakeSession(
+            [
+                FakeResponse(
+                    "discuz_uid = '0'"
+                    '<a href="member.php?mod=logging&amp;action=login">登录</a>'
+                    "您需要先登录才能继续本操作"
+                    '<input type="hidden" name="formhash" value="searchhash">'
+                )
+            ]
+        )
+
+        result = binmt.run("foo=bar", session_factory=lambda: session)
+
+        self.assertEqual(result.status, "failed")
+        self.assertIn("需要登录", result.message)
+        self.assertIn("Cookie", result.message)
+        self.assertEqual(len(session.calls), 1)
+
+    def test_run_extracts_formhash_with_reordered_attributes(self):
+        session = FakeSession(
+            [
+                FakeResponse('<input value="abc+123" type="hidden" name="formhash">'),
+                FakeResponse("签到成功"),
+                FakeResponse(
+                    '<input id="lxreward" value="%E9%87%91%E5%B8%81%2B5">'
+                    '<input id="lxtdays" value="12">'
+                ),
+            ]
+        )
+
+        result = binmt.run("foo=bar", session_factory=lambda: session)
+
+        self.assertEqual(result.status, "success")
+        self.assertIn("formhash=abc%2B123", session.calls[1][1])
+
     def test_run_fails_on_illegal_request_response(self):
         session = FakeSession(
             [
