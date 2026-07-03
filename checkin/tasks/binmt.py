@@ -205,6 +205,9 @@ def _safe_response_excerpt(text: str, cookie: str, limit: int = 160) -> str:
     excerpt = re.sub(r"<style\b[^>]*>.*?</style>", " ", excerpt, flags=re.IGNORECASE | re.DOTALL)
     excerpt = re.sub(r"<[^>]+>", " ", excerpt)
     excerpt = html.unescape(re.sub(r"\s+", " ", excerpt)).strip()
+    if not excerpt:
+        excerpt = re.sub(r"\s+", " ", text).strip()
+        excerpt = excerpt.replace("<", "&lt;").replace(">", "&gt;")
     for value in _cookie_values(cookie):
         if len(value) >= 6:
             excerpt = excerpt.replace(value, "[redacted-cookie]")

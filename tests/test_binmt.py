@@ -138,6 +138,11 @@ class BinmtTaskTests(unittest.TestCase):
         self.assertEqual(result.status, "failed")
         self.assertIn("未签到", result.message)
 
+    def test_safe_response_excerpt_falls_back_to_escaped_markup(self):
+        excerpt = binmt._safe_response_excerpt("<script>location.href='/x'</script>", "foo=bar")
+
+        self.assertEqual(excerpt, "&lt;script&gt;location.href='/x'&lt;/script&gt;")
+
 
 if __name__ == "__main__":
     unittest.main()
