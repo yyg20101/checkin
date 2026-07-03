@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import os
 import re
 from urllib.parse import quote, unquote
 
@@ -30,12 +31,22 @@ LOGIN_REQUIRED_TEXT = "您需要先登录"
 LOGIN_URL_TEXT = "member.php?mod=logging"
 LOGGED_OUT_UID_PATTERN = re.compile(r"discuz_uid\s*=\s*['\"]0['\"]")
 TITLE_PATTERN = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
+GUARD_MARKERS = (
+    "/_guard/html.js?js=slider_html",
+    "/_guard/",
+    "slider_html",
+)
+BINMT_PROXY_ENV = "CHECKIN_BINMT_PROXY"
 
 
 class BinmtPageError(ValueError):
     def __init__(self, message: str, details: dict[str, object] | None = None):
         super().__init__(message)
         self.details = details or {}
+
+
+class BinmtGuardChallenge(BinmtPageError):
+    pass
 
 
 def run(cookie: str, session_factory: SessionFactory = browser_session) -> CheckinResult:
@@ -49,6 +60,11 @@ def run(cookie: str, session_factory: SessionFactory = browser_session) -> Check
             "MT管理器论坛签到请求失败",
             {"error": str(exc)},
         )
+    except BinmtGuardChallenge as exc:
+        details = {"error": str(exc), **exc.details}
+        if not _proxy_url():
+            return CheckinResult.skipped(f"MT管理器论坛跳过: {exc}", details)
+        return CheckinResult.failed(f"MT管理器论坛签到失败: {exc}", details)
     except BinmtPageError as exc:
         return CheckinResult.failed(
             f"MT管理器论坛签到失败: {exc}",
@@ -73,13 +89,11 @@ def run(cookie: str, session_factory: SessionFactory = browser_session) -> Check
 def fetch_formhash(session, cookie: str) -> str:
     response = session.get(
         SIGN_PAGE_URL,
-        headers=_page_headers(cookie),
-        impersonate=BROWSER_IMPERSONATE,
-        timeout=TIMEOUT_SECONDS,
+        **_request_kwargs(_page_headers(cookie)),
     )
     response.raise_for_status()
 
-    _raise_for_page_error(response.text, "签到页")
+    _raise_for_response_error(response, cookie, "签到页")
     formhash = _extract_formhash(response.text)
     if not formhash:
         raise BinmtPageError(
@@ -96,12 +110,11 @@ def submit_checkin(session, cookie: str, formhash: str) -> None:
     )
     response = session.get(
         url,
-        headers=_ajax_headers(cookie),
-        impersonate=BROWSER_IMPERSONATE,
-        timeout=TIMEOUT_SECONDS,
+        **_request_kwargs(_ajax_headers(cookie)),
     )
     response.raise_for_status()
 
+    _raise_for_response_error(response, cookie, "签到接口")
     if ILLEGAL_REQUEST_TEXT in response.text:
         raise ValueError(ILLEGAL_REQUEST_TEXT)
     if _is_login_required_response(response.text):
@@ -111,13 +124,11 @@ def submit_checkin(session, cookie: str, formhash: str) -> None:
 def fetch_checkin_details(session, cookie: str) -> tuple[str, str]:
     response = session.get(
         SIGN_PAGE_URL,
-        headers=_page_headers(cookie),
-        impersonate=BROWSER_IMPERSONATE,
-        timeout=TIMEOUT_SECONDS,
+        **_request_kwargs(_page_headers(cookie)),
     )
     response.raise_for_status()
 
-    _raise_for_page_error(response.text, "签到详情页")
+    _raise_for_response_error(response, cookie, "签到详情页")
     if NOT_SIGNED_TEXT in response.text:
         raise ValueError("签到后仍显示未签到")
 
@@ -148,6 +159,16 @@ def _raise_for_page_error(text: str, page_name: str) -> None:
         raise ValueError(f"{page_name}提示需要登录，Cookie 可能已过期或未包含登录态")
 
 
+def _raise_for_response_error(response, cookie: str, page_name: str) -> None:
+    if _is_guard_challenge(response.text):
+        raise BinmtGuardChallenge(
+            f"{page_name}触发站点滑块防护，GitHub Actions 默认出口无法直接通过；"
+            f"请配置 {BINMT_PROXY_ENV} 或使用自托管 runner",
+            _build_page_diagnostics(response, cookie),
+        )
+    _raise_for_page_error(response.text, page_name)
+
+
 def _is_login_required_response(text: str) -> bool:
     if LOGIN_REQUIRED_TEXT in text:
         return True
@@ -163,6 +184,7 @@ def _build_page_diagnostics(response, cookie: str) -> dict[str, object]:
         "cookie_pairs": _count_cookie_pairs(cookie),
         "has_auth_cookie": "cQWy_2132_auth=" in cookie,
         "has_sid_cookie": "cQWy_2132_sid=" in cookie,
+        "proxy_configured": bool(_proxy_url()),
         "login_required_detected": _is_login_required_response(text),
         "logged_out_uid_detected": bool(LOGGED_OUT_UID_PATTERN.search(text)),
         "login_url_present": LOGIN_URL_TEXT in text,
@@ -170,6 +192,7 @@ def _build_page_diagnostics(response, cookie: str) -> dict[str, object]:
         "not_signed_text_present": NOT_SIGNED_TEXT in text,
         "reward_field_present": 'id="lxreward"' in text,
         "total_days_field_present": 'id="lxtdays"' in text,
+        "guard_challenge_detected": _is_guard_challenge(text),
         "captcha_or_challenge_detected": _has_captcha_or_challenge(text),
         "response_excerpt": _safe_response_excerpt(text, cookie),
     }
@@ -197,7 +220,12 @@ def _has_captcha_or_challenge(text: str) -> bool:
         "安全验证",
         "secqaa",
     )
-    return any(marker in lowered for marker in markers)
+    return _is_guard_challenge(text) or any(marker in lowered for marker in markers)
+
+
+def _is_guard_challenge(text: str) -> bool:
+    lowered = text.lower()
+    return any(marker.lower() in lowered for marker in GUARD_MARKERS)
 
 
 def _safe_response_excerpt(text: str, cookie: str, limit: int = 160) -> str:
@@ -226,6 +254,22 @@ def _cookie_values(cookie: str) -> list[str]:
         if value:
             values.append(value)
     return values
+
+
+def _request_kwargs(headers: dict[str, str]) -> dict[str, object]:
+    kwargs: dict[str, object] = {
+        "headers": headers,
+        "impersonate": BROWSER_IMPERSONATE,
+        "timeout": TIMEOUT_SECONDS,
+    }
+    proxy = _proxy_url()
+    if proxy:
+        kwargs["proxy"] = proxy
+    return kwargs
+
+
+def _proxy_url() -> str:
+    return os.environ.get(BINMT_PROXY_ENV, "").strip()
 
 
 def _page_headers(cookie: str) -> dict[str, str]:

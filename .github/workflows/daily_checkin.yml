@@ -25,6 +25,7 @@ jobs:
       COOKIE_HOSTLOC: ${{ secrets.COOKIE_HOSTLOC }}
       COOKIE_SMZDM: ${{ secrets.COOKIE_SMZDM }}
       COOKIE_V2EX: ${{ secrets.COOKIE_V2EX }}
+      CHECKIN_BINMT_PROXY: ${{ secrets.CHECKIN_BINMT_PROXY }}
     
     steps:
       - name: Checkout repository

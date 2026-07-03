@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 import requests
 
@@ -74,6 +75,36 @@ class BinmtTaskTests(unittest.TestCase):
         self.assertFalse(result.details["login_required_detected"])
         self.assertEqual(result.details["response_excerpt"], "login")
         self.assertEqual(len(session.calls), 1)
+
+    def test_run_skips_guard_challenge_without_proxy(self):
+        session = FakeSession([FakeResponse('<script src="/_guard/html.js?js=slider_html"></script>')])
+
+        with patch.dict("os.environ", {binmt.BINMT_PROXY_ENV: ""}):
+            result = binmt.run("foo=bar", session_factory=lambda: session)
+
+        self.assertEqual(result.status, "skipped")
+        self.assertIn("滑块防护", result.message)
+        self.assertTrue(result.details["guard_challenge_detected"])
+        self.assertFalse(result.details["proxy_configured"])
+        self.assertIn("/_guard/html.js", result.details["response_excerpt"])
+        self.assertEqual(len(session.calls), 1)
+
+    def test_run_uses_configured_proxy(self):
+        session = FakeSession(
+            [
+                FakeResponse('<input type="hidden" name="formhash" value="abc">'),
+                FakeResponse("签到成功"),
+                FakeResponse('<input id="lxreward" value="1"><input id="lxtdays" value="2">'),
+            ]
+        )
+
+        with patch.dict("os.environ", {binmt.BINMT_PROXY_ENV: "http://proxy.example:8080"}):
+            result = binmt.run("foo=bar", session_factory=lambda: session)
+
+        self.assertEqual(result.status, "success")
+        self.assertEqual(session.calls[0][2]["proxy"], "http://proxy.example:8080")
+        self.assertEqual(session.calls[1][2]["proxy"], "http://proxy.example:8080")
+        self.assertEqual(session.calls[2][2]["proxy"], "http://proxy.example:8080")
 
     def test_run_reports_login_required_page(self):
         session = FakeSession(
