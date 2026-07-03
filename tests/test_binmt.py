@@ -67,6 +67,11 @@ class BinmtTaskTests(unittest.TestCase):
 
         self.assertEqual(result.status, "failed")
         self.assertIn("formhash", result.message)
+        self.assertEqual(result.details["http_status"], 200)
+        self.assertEqual(result.details["page_title"], "未找到")
+        self.assertEqual(result.details["cookie_pairs"], 1)
+        self.assertFalse(result.details["has_auth_cookie"])
+        self.assertFalse(result.details["login_required_detected"])
         self.assertEqual(len(session.calls), 1)
 
     def test_run_reports_login_required_page(self):

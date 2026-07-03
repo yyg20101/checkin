@@ -29,6 +29,14 @@ ILLEGAL_REQUEST_TEXT = "访问请求当中含有非法字符"
 LOGIN_REQUIRED_TEXT = "您需要先登录"
 LOGIN_URL_TEXT = "member.php?mod=logging"
 LOGGED_OUT_UID_PATTERN = re.compile(r"discuz_uid\s*=\s*['\"]0['\"]")
+TITLE_PATTERN = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
+
+
+class BinmtPageError(ValueError):
+    def __init__(self, message: str, details: dict[str, object] | None = None):
+        super().__init__(message)
+        self.details = details or {}
+
 
 def run(cookie: str, session_factory: SessionFactory = browser_session) -> CheckinResult:
     try:
@@ -40,6 +48,11 @@ def run(cookie: str, session_factory: SessionFactory = browser_session) -> Check
         return CheckinResult.failed(
             "MT管理器论坛签到请求失败",
             {"error": str(exc)},
+        )
+    except BinmtPageError as exc:
+        return CheckinResult.failed(
+            f"MT管理器论坛签到失败: {exc}",
+            {"error": str(exc), **exc.details},
         )
     except ValueError as exc:
         return CheckinResult.failed(
@@ -69,7 +82,10 @@ def fetch_formhash(session, cookie: str) -> str:
     _raise_for_page_error(response.text, "签到页")
     formhash = _extract_formhash(response.text)
     if not formhash:
-        raise ValueError("未能从签到页提取 formhash，Cookie 可能已过期或页面结构已变化")
+        raise BinmtPageError(
+            "未能从签到页提取 formhash，Cookie 可能已过期或页面结构已变化",
+            _build_page_diagnostics(response, cookie),
+        )
     return formhash
 
 
@@ -136,6 +152,51 @@ def _is_login_required_response(text: str) -> bool:
     if LOGIN_REQUIRED_TEXT in text:
         return True
     return bool(LOGGED_OUT_UID_PATTERN.search(text) and LOGIN_URL_TEXT in text)
+
+
+def _build_page_diagnostics(response, cookie: str) -> dict[str, object]:
+    text = response.text
+    return {
+        "http_status": getattr(response, "status_code", "unknown"),
+        "page_title": _extract_title(text) or "未找到",
+        "response_chars": len(text),
+        "cookie_pairs": _count_cookie_pairs(cookie),
+        "has_auth_cookie": "cQWy_2132_auth=" in cookie,
+        "has_sid_cookie": "cQWy_2132_sid=" in cookie,
+        "login_required_detected": _is_login_required_response(text),
+        "logged_out_uid_detected": bool(LOGGED_OUT_UID_PATTERN.search(text)),
+        "login_url_present": LOGIN_URL_TEXT in text,
+        "illegal_request_detected": ILLEGAL_REQUEST_TEXT in text,
+        "not_signed_text_present": NOT_SIGNED_TEXT in text,
+        "reward_field_present": 'id="lxreward"' in text,
+        "total_days_field_present": 'id="lxtdays"' in text,
+        "captcha_or_challenge_detected": _has_captcha_or_challenge(text),
+    }
+
+
+def _extract_title(text: str) -> str:
+    match = TITLE_PATTERN.search(text)
+    if not match:
+        return ""
+    return html.unescape(re.sub(r"\s+", " ", match.group(1))).strip()
+
+
+def _count_cookie_pairs(cookie: str) -> int:
+    return sum(1 for part in cookie.split(";") if part.strip())
+
+
+def _has_captcha_or_challenge(text: str) -> bool:
+    lowered = text.lower()
+    markers = (
+        "captcha",
+        "cf-chl",
+        "cloudflare",
+        "just a moment",
+        "验证码",
+        "安全验证",
+        "secqaa",
+    )
+    return any(marker in lowered for marker in markers)
 
 
 def _page_headers(cookie: str) -> dict[str, str]:
