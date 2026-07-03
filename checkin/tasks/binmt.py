@@ -171,6 +171,7 @@ def _build_page_diagnostics(response, cookie: str) -> dict[str, object]:
         "reward_field_present": 'id="lxreward"' in text,
         "total_days_field_present": 'id="lxtdays"' in text,
         "captcha_or_challenge_detected": _has_captcha_or_challenge(text),
+        "response_excerpt": _safe_response_excerpt(text, cookie),
     }
 
 
@@ -197,6 +198,31 @@ def _has_captcha_or_challenge(text: str) -> bool:
         "secqaa",
     )
     return any(marker in lowered for marker in markers)
+
+
+def _safe_response_excerpt(text: str, cookie: str, limit: int = 160) -> str:
+    excerpt = re.sub(r"<script\b[^>]*>.*?</script>", " ", text, flags=re.IGNORECASE | re.DOTALL)
+    excerpt = re.sub(r"<style\b[^>]*>.*?</style>", " ", excerpt, flags=re.IGNORECASE | re.DOTALL)
+    excerpt = re.sub(r"<[^>]+>", " ", excerpt)
+    excerpt = html.unescape(re.sub(r"\s+", " ", excerpt)).strip()
+    for value in _cookie_values(cookie):
+        if len(value) >= 6:
+            excerpt = excerpt.replace(value, "[redacted-cookie]")
+    excerpt = re.sub(r"(?i)[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}", "[redacted-email]", excerpt)
+    excerpt = re.sub(r"\b[A-Fa-f0-9]{24,}\b", "[redacted-token]", excerpt)
+    return excerpt[:limit] if excerpt else "空"
+
+
+def _cookie_values(cookie: str) -> list[str]:
+    values: list[str] = []
+    for part in cookie.split(";"):
+        if "=" not in part:
+            continue
+        _, value = part.split("=", 1)
+        value = value.strip()
+        if value:
+            values.append(value)
+    return values
 
 
 def _page_headers(cookie: str) -> dict[str, str]:

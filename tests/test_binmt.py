@@ -72,6 +72,7 @@ class BinmtTaskTests(unittest.TestCase):
         self.assertEqual(result.details["cookie_pairs"], 1)
         self.assertFalse(result.details["has_auth_cookie"])
         self.assertFalse(result.details["login_required_detected"])
+        self.assertEqual(result.details["response_excerpt"], "login")
         self.assertEqual(len(session.calls), 1)
 
     def test_run_reports_login_required_page(self):

@@ -29,6 +29,7 @@ DETAIL_LABELS = {
     "points": "积分",
     "prestige": "威望",
     "response_chars": "响应字符数",
+    "response_excerpt": "响应摘要",
     "reward_field_present": "出现奖励字段",
     "rewards": "奖励详情",
     "sign_result": "签到结果",
