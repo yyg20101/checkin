@@ -35,6 +35,12 @@
       "name": "什么值得买",
       "module": "checkin.tasks.smzdm",
       "cookie_secret": "COOKIE_SMZDM"
+    },
+    {
+      "id": "nodeseek",
+      "name": "NodeSeek",
+      "module": "checkin.tasks.nodeseek",
+      "cookie_secret": "COOKIE_NODESEEK"
     }
   ]
 }

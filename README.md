@@ -12,6 +12,7 @@
 4. **MT管理器论坛**
 5. **V2EX**
 6. **什么值得买**
+7. **NodeSeek**
 
 已实现但暂不纳入统一每日任务：
 
@@ -31,6 +32,7 @@ checkin/
     enshan.py      # 已实现，暂未纳入每日统一任务
     hifiti.py
     hostloc.py
+    nodeseek.py
     smzdm.py
     v2ex.py
 legacy/
@@ -83,9 +85,14 @@ python3 run_checkin.py --task smzdm
 | `COOKIE_BINMT` | MT管理器论坛 | `binmt` | 每日任务 |
 | `COOKIE_V2EX` | V2EX | `v2ex` | 每日任务 |
 | `COOKIE_SMZDM` | 什么值得买 | `smzdm` | 每日任务 |
+| `COOKIE_NODESEEK` | NodeSeek | `nodeseek` | 每日任务 |
 | `COOKIE_ENSHAN` | 恩山无线论坛 | `enshan` | 可选，暂不进入每日任务 |
 
 本地调试时，可以通过同名环境变量传入 Cookie。
+
+NodeSeek 使用 [qd-today Cookie 模板](https://github.com/qd-today/templates/blob/master/NodeSeek%E7%AD%BE%E5%88%B0_Cookie%E7%89%88.har) 的流程：先打开 `/board`，再提交 `/api/attendance?random=true`，默认领取随机鸡腿。使用 `curl_cffi` 模拟 Chrome 的 TLS 指纹，相关说明见 [issue #1156](https://github.com/qd-today/templates/issues/1156)。接口即使返回 HTTP 500，只要消息确认“已完成签到”，也会记录为成功；Cookie 失效、Cloudflare 拦截和未知响应会记录为失败。
+
+在仓库的 GitHub Actions Secrets 中添加 `COOKIE_NODESEEK`，值为浏览器登录后的 Cookie。本地可先执行 `read -s COOKIE_NODESEEK` 粘贴 Cookie，再执行 `export COOKIE_NODESEEK` 和 `python3 run_checkin.py --task nodeseek`。未配置 Cookie 时会自动跳过；多账号沿用下面的分隔符格式。
 
 ## 多账号配置
 
