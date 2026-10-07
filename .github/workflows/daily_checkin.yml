@@ -14,7 +14,8 @@ permissions:
 
 jobs:
   checkin:
-    runs-on: ubuntu-latest
+    # 固定系统版本，避免 ubuntu-latest 自动迁移影响签到依赖
+    runs-on: ubuntu-24.04
     env:
       # 设置时区为中国时区
       TZ: Asia/Shanghai
@@ -33,7 +34,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.13'
           cache: 'pip'
@@ -130,7 +131,7 @@ jobs:
           echo "RELEASE_SUMMARY=$RELEASE_SUMMARY" >> $GITHUB_ENV
 
       - name: Upload logs artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: checkin-logs-${{ env.DATE }}
           path: checkin-logs/*.log
@@ -139,7 +140,7 @@ jobs:
 
       - name: Create Release
         id: create-release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: checkin-logs-${{ env.DATE }}
           name: 签到日志 - ${{ env.DATE }}
